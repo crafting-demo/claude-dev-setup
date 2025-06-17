@@ -2,5 +2,4 @@ hooks:
   post-checkout:
     cmd: |
       ./setup-claude.sh
-      export PATH="$HOME/.npm-global/bin:$PATH"
-      ./start-worker.sh
+      export PATH="$HOME/.npm-global/bin:$PATH"      
