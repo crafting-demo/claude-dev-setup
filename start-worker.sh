@@ -104,8 +104,20 @@ print_success "Required tools check passed"
 
 # Configure GitHub CLI
 print_status "Configuring GitHub CLI..."
-echo "$GITHUB_TOKEN" | gh auth login --with-token
-print_success "GitHub CLI authenticated"
+if gh auth status >/dev/null 2>&1; then
+    print_success "GitHub CLI already authenticated"
+else
+    # Try to authenticate, but don't fail if GITHUB_TOKEN env var is already in use
+    if echo "$GITHUB_TOKEN" | gh auth login --with-token >/dev/null 2>&1; then
+        print_success "GitHub CLI authenticated via token"
+    elif [ -n "$GITHUB_TOKEN" ]; then
+        # GITHUB_TOKEN is set, so authentication should work via env var
+        print_success "GitHub CLI authenticated via GITHUB_TOKEN environment variable"
+    else
+        print_error "GitHub CLI authentication failed"
+        exit 1
+    fi
+fi
 
 # Setup workspace
 WORKSPACE_DIR="$HOME/claude-workspace"
