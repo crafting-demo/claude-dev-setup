@@ -80,6 +80,51 @@ fi
 
 print_success "Environment variables validated"
 
+# Force logout to clear any previous authentication and re-authenticate with GITHUB_TOKEN
+print_status "Resetting GitHub CLI authentication..."
+set +e  # Temporarily disable exit on error
+echo "y" | gh auth logout --hostname github.com >/dev/null 2>&1
+logout_result=$?
+set -e  # Re-enable exit on error
+if [ $logout_result -eq 0 ]; then
+    print_status "Previous GitHub CLI session logged out"
+else
+    print_status "No previous GitHub CLI session found (this is normal)"
+fi
+
+if [ -n "$GITHUB_TOKEN" ]; then
+    print_status "Attempting to authenticate with GitHub CLI using token..."
+    set +e  # Temporarily disable exit on error
+    echo "$GITHUB_TOKEN" | gh auth login --with-token
+    login_result=$?
+    set -e  # Re-enable exit on error
+    
+    if [ $login_result -eq 0 ]; then
+        print_success "GitHub CLI authenticated via provided GITHUB_TOKEN"
+    else
+        print_error "GitHub CLI authentication failed with exit code: $login_result"
+        print_status "Checking if GITHUB_TOKEN environment variable authentication works..."
+        
+        # Test a simple gh command to see if env var auth works
+        set +e
+        gh auth status
+        status_result=$?
+        set -e
+        
+        if [ $status_result -eq 0 ]; then
+            print_success "GitHub CLI authenticated via GITHUB_TOKEN environment variable"
+        else
+            print_error "GitHub CLI authentication completely failed"
+            print_status "Token length: ${#GITHUB_TOKEN}"
+            print_status "Token starts with: ${GITHUB_TOKEN:0:10}..."
+            exit 1
+        fi
+    fi
+else
+    print_error "GITHUB_TOKEN is not set"
+    exit 1
+fi
+
 # Check for required tools
 print_status "Checking required tools..."
 
@@ -212,16 +257,16 @@ else
     exit 1
 fi
 
-# Check if there are any changes
-if git diff --quiet && git diff --cached --quiet; then
+# Check if there are any changes (including untracked files, excluding .claude directory)
+if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard | grep -v '^\.claude/')" ]; then
     print_warning "No changes detected. Exiting."
     exit 0
 fi
 
 print_status "Changes detected, proceeding with commit and push..."
 
-# Stage and commit changes
-git add .
+# Stage and commit changes (excluding .claude directory)
+git add . ':!.claude'
 COMMIT_MSG="Claude Code automation: $(echo "$CLAUDE_PROMPT" | head -c 50)..."
 git commit -m "$COMMIT_MSG"
 print_success "Changes committed"
