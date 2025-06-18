@@ -178,6 +178,17 @@ if [ -d "$TARGET_REPO_DIR" ]; then
     rm -rf "$TARGET_REPO_DIR"
 fi
 
+# Configure Git to use the GitHub token for authentication in automated environments
+print_status "Configuring Git authentication for automated environment..."
+git config --global credential.helper store
+git config --global user.name "Claude Code Automation"
+git config --global user.email "automation@claudecode.dev"
+
+# Set up Git credential store for this session
+echo "https://github-token:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+
+print_success "Git authentication configured"
+
 # Clone the target repository
 print_status "Cloning repository: $GITHUB_REPO"
 gh repo clone "$GITHUB_REPO" target-repo
@@ -273,8 +284,25 @@ print_success "Changes committed"
 
 # Push changes
 print_status "Pushing changes to origin/$BRANCH_NAME..."
-git push origin "$BRANCH_NAME"
-print_success "Changes pushed to remote"
+
+# Set up remote URL with token for this specific push if needed
+REPO_URL_WITH_TOKEN="https://github-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
+git remote set-url origin "$REPO_URL_WITH_TOKEN"
+
+if git push origin "$BRANCH_NAME"; then
+    print_success "Changes pushed to remote"
+else
+    print_error "Failed to push changes"
+    print_status "Attempting alternative push method..."
+    
+    # Try with explicit credentials
+    if git push "https://github-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git" "$BRANCH_NAME"; then
+        print_success "Changes pushed to remote (alternative method)"
+    else
+        print_error "All push attempts failed"
+        exit 1
+    fi
+fi
 
 # Handle PR creation/update based on action type
 if [ "$ACTION_TYPE" = "issue" ]; then
