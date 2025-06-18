@@ -120,7 +120,7 @@ else
 fi
 
 # Setup workspace
-WORKSPACE_DIR="$HOME/claude-workspace"
+WORKSPACE_DIR="/home/owner/claude/claude-workspace"
 TARGET_REPO_DIR="$WORKSPACE_DIR/target-repo"
 
 print_status "Setting up workspace..."
@@ -140,6 +140,33 @@ cd target-repo
 
 print_success "Repository cloned successfully"
 
+# Create .claude directory and settings.local.json for permissions
+mkdir -p .claude
+cat > .claude/settings.local.json << EOF
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "MultiEdit",
+      "LS",
+      "Glob",
+      "Grep",
+      "Bash",
+      "Task",
+      "TodoRead",
+      "TodoWrite",
+      "NotebookRead",
+      "NotebookEdit",
+      "WebFetch",
+      "WebSearch"
+    ],
+    "deny": []
+  }
+}
+EOF
+
 # Branch management based on action type
 if [ "$ACTION_TYPE" = "issue" ]; then
     print_status "Creating new branch for issue workflow..."
@@ -158,11 +185,25 @@ fi
 print_status "Executing Claude Code..."
 echo "Prompt: $CLAUDE_PROMPT"
 
+# Debug: Check if CLAUDE_PROMPT is effectively empty
+if [ -z "${CLAUDE_PROMPT// }" ]; then
+    print_error "CLAUDE_PROMPT is empty or contains only whitespace"
+    echo "Raw CLAUDE_PROMPT value: '$CLAUDE_PROMPT'"
+    echo "Length: ${#CLAUDE_PROMPT}"
+    exit 1
+fi
+
+print_status "CLAUDE_PROMPT validation passed (length: ${#CLAUDE_PROMPT})"
+
 # Ensure PATH includes npm global binaries (in case user didn't restart shell)
 export PATH="$HOME/.npm-global/bin:$PATH"
 
+# Test Claude Code with a simple hello command
+print_status "Testing Claude Code with a simple command..."
+claude -p "Say hello"
+
 # Run Claude Code
-if claude "$CLAUDE_PROMPT"; then
+if claude -p "$CLAUDE_PROMPT" --verbose; then
     print_success "Claude Code execution completed"
 else
     print_error "Claude Code execution failed"
