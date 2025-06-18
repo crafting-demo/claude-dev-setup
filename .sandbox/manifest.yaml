@@ -2,5 +2,7 @@ hooks:
   post-checkout:
     cmd: |
       ./setup-claude.sh
-      export PATH="$HOME/.npm-global/bin:$PATH"      
+      export PATH="$HOME/.npm-global/bin:$PATH"
+      export CLI_SCRIPT=y
       ./start-worker.sh
+      cs sandbox remove "$(cs sb show 2>&1 | awk -F': ' '/^Name:/ {print $2}' | cut -d'/' -f2)" --force
