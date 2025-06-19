@@ -46,7 +46,7 @@ export async function scanPRs(options, state) {
         maxCommentId = Math.max(maxCommentId, comment.id);
 
         if (comment.body.includes(TRIGGER_PHRASE)) {
-          console.log(`Trigger phrase found in PR #${pr.number} (commentId: ${comment.id})`);
+          console.log(`Trigger phrase found in PR #${pr.number} (commentId: ${comment.id}, user: ${comment.user.login})`);
 
           const payload = {
             owner,

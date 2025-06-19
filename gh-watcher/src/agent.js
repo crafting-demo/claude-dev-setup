@@ -6,10 +6,10 @@ export async function runDevAgent(payload, options) {
   const { owner, repo, kind, prompt, issueNumber, prNumber, filePath, lineNumber } = payload;
   const { dryRun, verbose } = options;
 
-  // Create a unique sandbox name
-  const repoName = repo.split('/')[1];
-  const timestamp = Date.now().toString().slice(-6);
-  const sandboxName = `cw-${repoName}-${issueNumber}-${timestamp}`;
+  // Create a unique sandbox name that is less than 20 chars
+  const repoName = repo.split('/')[1] || 'repo';
+  const timestamp = Date.now().toString().slice(-4);
+  const sandboxName = `cw-${repoName.substring(0,8)}-${issueNumber}-${timestamp}`.substring(0, 20);
 
   // Hardcoded command template
   const commandTemplate = `cs sandbox create \${sandboxName} \\
@@ -77,4 +77,4 @@ export async function runDevAgent(payload, options) {
     });
     console.log(`Posted failure comment to #${issueNumber}.`);
   }
-} 
+}
