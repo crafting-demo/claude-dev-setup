@@ -17,6 +17,11 @@ const argv = yargs(hideBin(process.argv))
     description: 'Run with verbose logging',
     default: false,
   })
+  .option('debug', {
+    type: 'boolean',
+    description: 'Wait for worker initialization and show all output',
+    default: false,
+  })
   .help()
   .alias('help', 'h')
   .argv;

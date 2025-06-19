@@ -13,3 +13,4 @@ build/
 dist/ 
 gh-watcher/node_modules/*
 gh-watcher/state.json
+gh-watcher/dev_prompt.txt

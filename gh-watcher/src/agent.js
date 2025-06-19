@@ -82,8 +82,8 @@ export async function runDevAgent(payload, options) {
     console.log(`Writing prompt to ${promptFilePath} (${prompt.length} characters)`);
     writeFileSync(promptFilePath, prompt, 'utf8');
 
-    // Transfer dev_prompt.txt to the sandbox's claude-workspace directory
-    const scpCmd = `cs scp ${promptFilePath} ${extractedSandboxName}:/home/owner/claude-workspace/dev_prompt.txt`;
+    // Transfer dev_prompt.txt to the sandbox's claude/claude-workspace directory  
+    const scpCmd = `cs scp ${promptFilePath} ${extractedSandboxName}:/home/owner/claude/claude-workspace/dev_prompt.txt`;
     console.log(`Transferring prompt file to sandbox: ${scpCmd}`);
     
     await new Promise((resolve, reject) => {
@@ -112,24 +112,59 @@ export async function runDevAgent(payload, options) {
       console.warn(`Failed to clean up prompt file: ${err.message}`);
     }
 
-    // Execute initialize_worker.sh in the sandbox (fire and forget)
+    // Execute initialize_worker.sh in the sandbox
     const execCmd = `cs exec -W ${extractedSandboxName}/claude -- ~/claude/dev-worker/initialize_worker.sh`;
     console.log(`Firing off worker initialization: ${execCmd}`);
     
-    const child = exec(execCmd, (error, stdout, stderr) => {
-      // This callback will run eventually, but we don't wait for it
-      if (error) {
-        console.error(`Worker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
-      } else {
-        console.log(`Worker initialization completed for ${kind} #${itemNumber}`);
-      }
-      if (stdout) console.log(`Worker stdout: ${stdout}`);
-      if (stderr) console.log(`Worker stderr: ${stderr}`);
-    });
+    if (options.debug) {
+      console.log(`DEBUG MODE: Waiting for worker initialization to complete...`);
+      
+      // In debug mode, wait for completion and show all output
+      await new Promise((resolve, reject) => {
+        const child = exec(execCmd, { timeout: 600000 }, (error, stdout, stderr) => {
+          if (error) {
+            console.error(`Worker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
+            if (stdout) console.log(`Worker stdout:\n${stdout}`);
+            if (stderr) console.error(`Worker stderr:\n${stderr}`);
+            reject(error);
+            return;
+          }
+          
+          console.log(`Worker initialization completed for ${kind} #${itemNumber}`);
+          if (stdout) console.log(`Worker stdout:\n${stdout}`);
+          if (stderr) console.log(`Worker stderr:\n${stderr}`);
+          resolve({ stdout, stderr });
+        });
+        
+        // 10 minute timeout for debug mode
+        setTimeout(() => {
+          child.kill();
+          reject(new Error('Worker initialization timed out after 10 minutes'));
+        }, 600000);
+      });
+      
+      console.log(`DEBUG: Worker initialization completed successfully`);
+      
+    } else {
+      // Normal mode: fire and forget
+      const child = exec(execCmd, { 
+        detached: true,
+        stdio: 'ignore'
+      }, (error, stdout, stderr) => {
+        // This callback will run eventually, but we don't wait for it
+        if (error) {
+          console.error(`Worker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
+        } else {
+          console.log(`Worker initialization completed for ${kind} #${itemNumber}`);
+        }
+        if (stdout) console.log(`Worker stdout: ${stdout}`);
+        if (stderr) console.log(`Worker stderr: ${stderr}`);
+      });
 
-    // Detach the process so it continues running after we return
-    child.unref();
-    console.log(`Worker initialization started in background for ${kind} #${itemNumber}`);
+      // Completely detach the process so it continues running independently
+      child.unref();
+      console.log(`Worker initialization started in background for ${kind} #${itemNumber}`);
+    }
 
     const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
     await octokit.issues.createComment({
