@@ -288,14 +288,20 @@ print_status "CLAUDE_PROMPT validation passed (length: ${#FINAL_PROMPT})"
 
 # Test Claude Code with a simple hello command
 print_status "Testing Claude Code with a simple command..."
-if claude -p "Say hello" 2>&1; then
+if timeout 30 claude -p "Say hello" 2>&1; then
     print_success "Claude test command succeeded"
 else
-    print_error "Claude test command failed with exit code: $?"
+    EXIT_CODE=$?
+    print_error "Claude test command failed with exit code: $EXIT_CODE"
+    if [ $EXIT_CODE -eq 124 ]; then
+        print_error "Command timed out after 30 seconds - likely hanging on auth or input"
+    fi
     print_error "Checking Claude Code configuration..."
-    claude --help || print_error "Claude --help also failed"
+    timeout 10 claude --help 2>&1 || print_error "Claude --help also failed/timed out"
     print_error "Environment check:"
     echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo '[set]' || echo '[NOT SET]')"
+    echo "PATH: $PATH"
+    which claude
     exit 1
 fi
 
