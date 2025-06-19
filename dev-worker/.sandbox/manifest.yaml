@@ -1,8 +1,8 @@
 hooks:
   post-checkout:
     cmd: |
-      /dev-worker/setup-claude.sh
+     ./dev-worker/setup-claude.sh
       export PATH="$HOME/.npm-global/bin:$PATH"
       export CLI_SCRIPT=y
-      /dev-worker/start-worker.sh
+      ./dev-worker/start-worker.sh
       cs sandbox remove "$(cs sb show 2>&1 | awk -F': ' '/^Name:/ {print $2}' | cut -d'/' -f2)" --force
