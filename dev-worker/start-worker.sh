@@ -288,7 +288,16 @@ print_status "CLAUDE_PROMPT validation passed (length: ${#FINAL_PROMPT})"
 
 # Test Claude Code with a simple hello command
 print_status "Testing Claude Code with a simple command..."
-claude -p "Say hello"
+if claude -p "Say hello" 2>&1; then
+    print_success "Claude test command succeeded"
+else
+    print_error "Claude test command failed with exit code: $?"
+    print_error "Checking Claude Code configuration..."
+    claude --help || print_error "Claude --help also failed"
+    print_error "Environment check:"
+    echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo '[set]' || echo '[NOT SET]')"
+    exit 1
+fi
 
 # Run Claude Code
 if claude -p "$FINAL_PROMPT" --verbose; then
