@@ -39,13 +39,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Step 1: Run setup-claude.sh
 print_status "Step 1: Setting up Claude Code..."
 if [ -f "$SCRIPT_DIR/setup-claude.sh" ]; then
-    print_status "Executing setup-claude.sh..."
-    bash "$SCRIPT_DIR/setup-claude.sh"
+    print_status "Sourcing setup-claude.sh to preserve PATH..."
+    source "$SCRIPT_DIR/setup-claude.sh"
     print_success "Claude Code setup completed"
     
-    # Ensure PATH includes Claude Code after installation
+    # Ensure PATH includes Claude Code after installation (should already be set by sourced script)
     export PATH="$HOME/.npm-global/bin:$PATH"
-    print_status "Updated PATH to include Claude Code installation directory"
+    print_status "PATH confirmed: $PATH"
     
     # Verify Claude Code is accessible
     print_status "Testing Claude Code accessibility..."
