@@ -43,7 +43,7 @@ export async function scanIssues(options, state) {
             owner,
             repo,
             kind: 'issue',
-            prompt: `Issue #${issue.number}: ${issue.title}\\n\\n${comment.body}`,
+            prompt: `Issue #${issue.number}: ${issue.title}\\n\\n${issue.body}\\n\\n${comment.body}`,
             issueNumber: issue.number,
           };
 

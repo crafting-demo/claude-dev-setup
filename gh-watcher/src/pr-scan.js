@@ -48,16 +48,15 @@ export async function scanPRs(options, state) {
         if (comment.body.includes(TRIGGER_PHRASE)) {
           console.log(`Trigger phrase found in PR #${pr.number} (commentId: ${comment.id})`);
 
-          const prompt = comment.path
-            ? `PR #${pr.number} review comment on ${comment.path}:${comment.line}\\n\\n${comment.body}`
-            : `PR #${pr.number} comment\\n\\n${comment.body}`;
-
           const payload = {
             owner,
             repo,
             kind: 'pr_comment',
-            prompt: prompt,
+            prompt: comment.body,
             issueNumber: pr.number,
+            prNumber: pr.number,
+            filePath: comment.path,
+            lineNumber: comment.line,
           };
 
           await runDevAgent(payload, options);

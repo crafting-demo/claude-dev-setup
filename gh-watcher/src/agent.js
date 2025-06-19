@@ -3,7 +3,7 @@ import { GITHUB_TOKEN } from './config.js';
 import { octokit } from './github.js';
 
 export async function runDevAgent(payload, options) {
-  const { owner, repo, kind, prompt, issueNumber } = payload;
+  const { owner, repo, kind, prompt, issueNumber, prNumber, filePath, lineNumber } = payload;
   const { dryRun, verbose } = options;
 
   // Hardcoded command template
@@ -13,6 +13,9 @@ export async function runDevAgent(payload, options) {
   -D 'claude/env[CLAUDE_PROMPT]=\${prompt}' \\
   -D 'claude/env[GITHUB_TOKEN]=\${GITHUB_TOKEN}' \\
   -D 'claude/env[ACTION_TYPE]=\${kind}' \\
+  -D 'claude/env[PR_NUMBER]=\${prNumber}' \\
+  -D 'claude/env[FILE_PATH]=\${filePath}' \\
+  -D 'claude/env[LINE_NUMBER]=\${lineNumber}' \\
   -D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`;
 
   // Escape the prompt to handle special characters in the shell
@@ -23,6 +26,9 @@ export async function runDevAgent(payload, options) {
     .replace(/\${repo}/g, repo)
     .replace(/\${prompt}/g, escapedPrompt)
     .replace(/\${kind}/g, kind)
+    .replace(/\${prNumber}/g, prNumber || '')
+    .replace(/\${filePath}/g, filePath || '')
+    .replace(/\${lineNumber}/g, lineNumber || '')
     .replace(/\${GITHUB_TOKEN}/g, GITHUB_TOKEN);
 
   console.log(`[${dryRun ? 'DRY RUN' : 'ACTION'}] Dev agent command prepared.`);
