@@ -102,6 +102,10 @@ fi
 
 print_success "Environment variables validated"
 
+# Ensure PATH includes npm global binaries (Claude Code installation directory)
+export PATH="$HOME/.npm-global/bin:$PATH"
+print_status "Updated PATH to include Claude Code installation directory"
+
 # Force logout to clear any previous authentication and re-authenticate with GITHUB_TOKEN
 print_status "Resetting GitHub CLI authentication..."
 set +e  # Temporarily disable exit on error
