@@ -80,5 +80,6 @@ export async function runDevAgent(payload, options) {
         body: resultMessage,
     });
     console.log(`Posted failure comment to #${issueNumber}.`);
+    throw error;
   }
 }
