@@ -6,8 +6,13 @@ export async function runDevAgent(payload, options) {
   const { owner, repo, kind, prompt, issueNumber, prNumber, filePath, lineNumber } = payload;
   const { dryRun, verbose } = options;
 
+  // Create a unique sandbox name
+  const repoName = repo.split('/')[1];
+  const timestamp = Date.now().toString().slice(-6);
+  const sandboxName = `cw-${repoName}-${issueNumber}-${timestamp}`;
+
   // Hardcoded command template
-  const commandTemplate = `cs sandbox create my-claude-sandbox \\
+  const commandTemplate = `cs sandbox create \${sandboxName} \\
   -t claude-code-automation \\
   -D 'claude/env[GITHUB_REPO]=\${owner}/\${repo}' \\
   -D 'claude/env[CLAUDE_PROMPT]=\${prompt}' \\
@@ -22,6 +27,7 @@ export async function runDevAgent(payload, options) {
   const escapedPrompt = prompt.replace(/'/g, "'\\''");
 
   const cmd = commandTemplate
+    .replace(/\${sandboxName}/g, sandboxName)
     .replace(/\${owner}/g, owner)
     .replace(/\${repo}/g, repo)
     .replace(/\${prompt}/g, escapedPrompt)
