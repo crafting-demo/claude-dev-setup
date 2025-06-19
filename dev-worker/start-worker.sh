@@ -63,7 +63,7 @@ echo "ACTION_TYPE: $ACTION_TYPE"
 echo "PR_NUMBER: $PR_NUMBER"
 echo "FILE_PATH: $FILE_PATH"
 echo "LINE_NUMBER: $LINE_NUMBER"
-echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[empty]")"
+echo "ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY"
 
 # Validate required environment variables
 print_status "Validating environment variables..."
@@ -297,7 +297,7 @@ fi
 
 # Test Claude Code with a simple hello command  
 print_status "Testing Claude Code with a simple command..."
-if timeout 30 claude -p "Say hello" 2>&1; then
+if timeout 30 claude -p "Say hello" --verbose 2>&1; then
     print_success "Claude test command succeeded"
 else
     EXIT_CODE=$?
