@@ -1,10 +1,6 @@
 hooks:
   post-checkout:
     cmd: |
-     ./dev-worker/setup-claude.sh
       export PATH="$HOME/.npm-global/bin:$PATH"
       export CLI_SCRIPT=y
-      ./dev-worker/start-worker.sh
-      if [ "$SHOULD_DELETE" = "true" ]; then
-        cs sandbox remove "$(cs sb show 2>&1 | awk -F': ' '/^Name:/ {print $2}' | cut -d'/' -f2)" --force
-      fi
+      mkdir -p "$HOME/claude-workspace"

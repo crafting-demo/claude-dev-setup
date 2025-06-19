@@ -37,10 +37,27 @@ command_exists() {
 
 print_status "=== Claude Code Automation Workflow ==="
 
+# Read prompt from dev_prompt.txt file
+PROMPT_FILE="/home/owner/claude-workspace/dev_prompt.txt"
+print_status "Reading prompt from file: $PROMPT_FILE"
+
+if [ ! -f "$PROMPT_FILE" ]; then
+    print_error "Prompt file not found: $PROMPT_FILE"
+    exit 1
+fi
+
+CLAUDE_PROMPT=$(cat "$PROMPT_FILE")
+if [ -z "$CLAUDE_PROMPT" ]; then
+    print_error "Prompt file is empty: $PROMPT_FILE"
+    exit 1
+fi
+
+print_status "Prompt loaded successfully (${#CLAUDE_PROMPT} characters)"
+print_status "Prompt preview: $(echo "$CLAUDE_PROMPT" | head -c 100)..."
+
 # Debug: Print environment variables (safely)
 print_status "Environment variables:"
 echo "GITHUB_REPO: $GITHUB_REPO"
-echo "CLAUDE_PROMPT: $(echo "$CLAUDE_PROMPT" | head -c 50)..."
 echo "GITHUB_TOKEN: $([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")"
 echo "ACTION_TYPE: $ACTION_TYPE"
 echo "PR_NUMBER: $PR_NUMBER"
@@ -51,12 +68,11 @@ echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "
 # Validate required environment variables
 print_status "Validating environment variables..."
 
-if [ -z "$GITHUB_REPO" ] || [ -z "$CLAUDE_PROMPT" ] || [ -z "$GITHUB_TOKEN" ] || [ -z "$ACTION_TYPE" ]; then
+if [ -z "$GITHUB_REPO" ] || [ -z "$GITHUB_TOKEN" ] || [ -z "$ACTION_TYPE" ]; then
     print_error "Missing required environment variables"
-    echo "Required: GITHUB_REPO, CLAUDE_PROMPT, GITHUB_TOKEN, ACTION_TYPE"
+    echo "Required: GITHUB_REPO, GITHUB_TOKEN, ACTION_TYPE"
     echo "Current values:"
     echo "GITHUB_REPO: '$GITHUB_REPO'"
-    echo "CLAUDE_PROMPT: '$([ -n "$CLAUDE_PROMPT" ] && echo "[set]" || echo "[empty]")'"
     echo "GITHUB_TOKEN: '$([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")'"
     echo "ACTION_TYPE: '$ACTION_TYPE'"
     exit 1

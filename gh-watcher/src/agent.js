@@ -1,4 +1,5 @@
 import { exec } from 'node:child_process';
+import { writeFileSync, unlinkSync } from 'node:fs';
 import { GITHUB_TOKEN, TRIGGER_PHRASE } from './config.js';
 import { octokit } from './github.js';
 
@@ -12,11 +13,10 @@ export async function runDevAgent(payload, options) {
   const itemNumber = issueNumber || prNumber;
   const sandboxName = `cw-${repoName.substring(0,8)}-${itemNumber}-${timestamp}`.substring(0, 20);
 
-  // Hardcoded command template
+  // Hardcoded command template (prompt now passed via file, not env var)
   const commandTemplate = `cs sandbox create \${sandboxName} \\
   -t claude-code-automation \\
   -D 'claude/env[GITHUB_REPO]=\${owner}/\${repo}' \\
-  -D 'claude/env[CLAUDE_PROMPT]=\${prompt}' \\
   -D 'claude/env[GITHUB_TOKEN]=\${GITHUB_TOKEN}' \\
   -D 'claude/env[ACTION_TYPE]=\${kind}' \\
   -D 'claude/env[TRIGGER_PHRASE]=\${triggerPhrase}' \\
@@ -26,20 +26,10 @@ export async function runDevAgent(payload, options) {
   -D 'claude/env[SHOULD_DELETE]=\${shouldDelete}' \\
   -D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`;
 
-  // Escape the prompt to handle special characters in the shell
-  const escapedPrompt = prompt
-    .replace(/\\/g, '\\\\')  // Escape backslashes first
-    .replace(/'/g, "'\\''")  // Escape single quotes
-    .replace(/\n/g, '\\n')   // Escape newlines
-    .replace(/\r/g, '\\r')   // Escape carriage returns
-    .replace(/\t/g, '\\t')   // Escape tabs
-    .replace(/\$/g, '\\$');  // Escape dollar signs
-
   const cmd = commandTemplate
     .replace(/\${sandboxName}/g, sandboxName)
     .replace(/\${owner}/g, owner)
     .replace(/\${repo}/g, repo)
-    .replace(/\${prompt}/g, escapedPrompt)
     .replace(/\${kind}/g, kind)
     .replace(/\${triggerPhrase}/g, TRIGGER_PHRASE)
     .replace(/\${prNumber}/g, prNumber || '')
@@ -54,31 +44,104 @@ export async function runDevAgent(payload, options) {
   if (dryRun) return;
 
   try {
-    // Fire off the command and return immediately - don't wait for completion
-    const child = exec(cmd, (error, stdout, stderr) => {
+    console.log(`Executing sandbox creation command synchronously for ${kind} #${itemNumber}...`);
+    
+    // Wait for sandbox creation to complete
+    await new Promise((resolve, reject) => {
+      const child = exec(cmd, { timeout: 120000 }, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`Sandbox creation failed for ${kind} #${itemNumber}: ${error.message}`);
+          if (stdout) console.log(`Sandbox stdout: ${stdout}`);
+          if (stderr) console.error(`Sandbox stderr: ${stderr}`);
+          reject(error);
+          return;
+        }
+        
+        // Always surface output for debugging
+        console.log(`Sandbox creation completed successfully for ${kind} #${itemNumber}`);
+        if (stdout) console.log(`Sandbox stdout: ${stdout}`);
+        if (stderr) console.log(`Sandbox stderr: ${stderr}`);
+        
+        resolve({ stdout, stderr });
+      });
+      
+      // Safety timeout (2 minutes)
+      setTimeout(() => {
+        child.kill();
+        reject(new Error('Sandbox creation timed out after 2 minutes'));
+      }, 120000);
+    });
+
+    console.log(`Sandbox is ready for ${kind} #${itemNumber}, proceeding with file transfer and execution...`);
+
+    // Extract sandbox name from the create command for subsequent operations
+    const extractedSandboxName = sandboxName; // We already have it from the command template
+
+    // Create dev_prompt.txt with the complete prompt
+    const promptFilePath = './dev_prompt.txt';
+    console.log(`Writing prompt to ${promptFilePath} (${prompt.length} characters)`);
+    writeFileSync(promptFilePath, prompt, 'utf8');
+
+    // Transfer dev_prompt.txt to the sandbox's claude-workspace directory
+    const scpCmd = `cs scp ${promptFilePath} ${extractedSandboxName}:/home/owner/claude-workspace/dev_prompt.txt`;
+    console.log(`Transferring prompt file to sandbox: ${scpCmd}`);
+    
+    await new Promise((resolve, reject) => {
+      exec(scpCmd, { timeout: 30000 }, (error, stdout, stderr) => {
+        if (error) {
+          console.error(`File transfer failed for ${kind} #${itemNumber}: ${error.message}`);
+          if (stdout) console.log(`SCP stdout: ${stdout}`);
+          if (stderr) console.error(`SCP stderr: ${stderr}`);
+          reject(error);
+          return;
+        }
+        
+        console.log(`File transfer completed successfully for ${kind} #${itemNumber}`);
+        if (stdout) console.log(`SCP stdout: ${stdout}`);
+        if (stderr) console.log(`SCP stderr: ${stderr}`);
+        
+        resolve({ stdout, stderr });
+      });
+    });
+
+    // Clean up local prompt file
+    try {
+      unlinkSync(promptFilePath);
+      console.log(`Cleaned up local prompt file: ${promptFilePath}`);
+    } catch (err) {
+      console.warn(`Failed to clean up prompt file: ${err.message}`);
+    }
+
+    // Execute initialize_worker.sh in the sandbox (fire and forget)
+    const execCmd = `cs exec -W ${extractedSandboxName}/claude -- ./dev-worker/initialize_worker.sh`;
+    console.log(`Firing off worker initialization: ${execCmd}`);
+    
+    const child = exec(execCmd, (error, stdout, stderr) => {
       // This callback will run eventually, but we don't wait for it
       if (error) {
-        console.error(`Sandbox creation failed for ${kind} #${itemNumber}: ${error.message}`);
-      } else if (verbose) {
-        console.log(`Sandbox stdout: ${stdout}`);
-        if (stderr) console.error(`Sandbox stderr: ${stderr}`);
+        console.error(`Worker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
+      } else {
+        console.log(`Worker initialization completed for ${kind} #${itemNumber}`);
       }
+      if (stdout) console.log(`Worker stdout: ${stdout}`);
+      if (stderr) console.log(`Worker stderr: ${stderr}`);
     });
 
     // Detach the process so it continues running after we return
     child.unref();
+    console.log(`Worker initialization started in background for ${kind} #${itemNumber}`);
 
-    const resultMessage = `🚀 Dev agent sandbox creation initiated for ${kind} #${itemNumber}. Check the sandbox list for status.`;
+    const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
     await octokit.issues.createComment({
       owner,
       repo,
       issue_number: itemNumber,
       body: resultMessage,
     });
-    console.log(`Posted initiation comment to #${itemNumber}. Sandbox creation running in background.`);
+    console.log(`Posted success comment to #${itemNumber}. Worker initialization running in background.`);
 
   } catch (error) {
-    const resultMessage = `❌ Dev agent failed to start for ${kind} #${itemNumber}.`;
+    const resultMessage = `❌ Dev agent sandbox creation failed for ${kind} #${itemNumber}: ${error.message}`;
     await octokit.issues.createComment({
         owner,
         repo,

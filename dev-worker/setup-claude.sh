@@ -73,10 +73,7 @@ fi
 
 print_success "Prerequisites check passed"
 
-# Step 1: Create claude-workspace directory
-print_status "Creating claude-workspace directory..."
-mkdir -p "$HOME/claude-workspace"
-print_success "Created claude-workspace directory"
+# Step 1: claude-workspace directory is now created by manifest.yaml
 
 # Step 2: Setup npm global directory
 print_status "Setting up npm global directory..."
