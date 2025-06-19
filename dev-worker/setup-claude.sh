@@ -137,7 +137,7 @@ if command_exists claude; then
         echo "  3. Start using Claude Code: claude"
         echo
         print_warning "Note: You'll need to authenticate with your Anthropic API key when you first run Claude Code"
-        exit 0
+        return 0
     fi
 fi
 
