@@ -82,8 +82,8 @@ export async function runDevAgent(payload, options) {
     console.log(`Writing prompt to ${promptFilePath} (${prompt.length} characters)`);
     writeFileSync(promptFilePath, prompt, 'utf8');
 
-    // Transfer dev_prompt.txt to the sandbox's claude/claude-workspace directory  
-    const scpCmd = `cs scp ${promptFilePath} ${extractedSandboxName}:/home/owner/claude/claude-workspace/dev_prompt.txt`;
+    // Transfer dev_prompt.txt to the sandbox's claude-workspace directory  
+    const scpCmd = `cs scp ${promptFilePath} ${extractedSandboxName}:/home/owner/claude-workspace/dev_prompt.txt`;
     console.log(`Transferring prompt file to sandbox: ${scpCmd}`);
     
     await new Promise((resolve, reject) => {
@@ -113,7 +113,7 @@ export async function runDevAgent(payload, options) {
     }
 
     // Execute initialize_worker.sh in the sandbox
-    const execCmd = `cs exec -W ${extractedSandboxName}/claude -- ~/claude/dev-worker/initialize_worker.sh`;
+    const execCmd = `cs exec -W ${extractedSandboxName}/claude -- ~/claude-dev-setup/dev-worker/initialize_worker.sh`;
     console.log(`Firing off worker initialization: ${execCmd}`);
     
     if (options.debug) {

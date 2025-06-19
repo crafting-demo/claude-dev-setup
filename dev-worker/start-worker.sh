@@ -38,7 +38,7 @@ command_exists() {
 print_status "=== Claude Code Automation Workflow ==="
 
 # Read prompt from dev_prompt.txt file
-PROMPT_FILE="/home/owner/claude/claude-workspace/dev_prompt.txt"
+PROMPT_FILE="/home/owner/claude-workspace/dev_prompt.txt"
 print_status "Reading prompt from file: $PROMPT_FILE"
 
 if [ ! -f "$PROMPT_FILE" ]; then
@@ -191,7 +191,7 @@ else
 fi
 
 # Setup workspace
-WORKSPACE_DIR="/home/owner/claude/claude-workspace"
+WORKSPACE_DIR="/home/owner/claude-workspace"
 TARGET_REPO_DIR="$WORKSPACE_DIR/target-repo"
 
 print_status "Setting up workspace..."
