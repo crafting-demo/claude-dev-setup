@@ -46,6 +46,29 @@ if [ -f "$SCRIPT_DIR/setup-claude.sh" ]; then
     # Ensure PATH includes Claude Code after installation
     export PATH="$HOME/.npm-global/bin:$PATH"
     print_status "Updated PATH to include Claude Code installation directory"
+    
+    # Verify Claude Code is accessible
+    print_status "Testing Claude Code accessibility..."
+    if command -v claude >/dev/null 2>&1; then
+        print_success "Claude command found in PATH"
+        
+        # Test that claude actually runs
+        if claude --version >/dev/null 2>&1; then
+            CLAUDE_VERSION=$(claude --version 2>/dev/null || echo "unknown")
+            print_success "Claude Code is working (version: $CLAUDE_VERSION)"
+        else
+            print_error "Claude command found but not working properly"
+            print_error "Trying claude --help to diagnose..."
+            claude --help || true
+            exit 1
+        fi
+    else
+        print_error "Claude command not found in PATH after installation"
+        print_error "Current PATH: $PATH"
+        print_error "Checking if claude exists in expected location..."
+        ls -la "$HOME/.npm-global/bin/" || true
+        exit 1
+    fi
 else
     print_error "setup-claude.sh not found in $SCRIPT_DIR"
     exit 1
