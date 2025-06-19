@@ -60,6 +60,7 @@ if [ -f "$SCRIPT_DIR/setup-claude.sh" ]; then
             print_error "Claude command found but not working properly"
             print_error "Trying claude --help to diagnose..."
             claude --help || true
+            echo $ANTHROPIC_API_KEY
             exit 1
         fi
     else
