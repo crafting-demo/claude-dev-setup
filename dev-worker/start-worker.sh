@@ -284,8 +284,7 @@ fi
 
 print_status "CLAUDE_PROMPT validation passed (length: ${#FINAL_PROMPT})"
 
-# Ensure PATH includes npm global binaries (in case user didn't restart shell)
-export PATH="$HOME/.npm-global/bin:$PATH"
+# PATH already exported earlier in script
 
 # Test Claude Code with a simple hello command
 print_status "Testing Claude Code with a simple command..."
