@@ -12,3 +12,4 @@
 build/
 dist/ 
 gh-watcher/node_modules/*
+gh-watcher/state.json
