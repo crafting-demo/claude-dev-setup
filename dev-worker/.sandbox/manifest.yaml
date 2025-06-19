@@ -1,7 +1,6 @@
 hooks:
   post-checkout:
-    cmd: |
-      export PATH="$HOME/.npm-global/bin:$PATH"
+    cmd: |      
       export CLI_SCRIPT=y
       mkdir -p "$HOME/claude"
       mkdir -p "$HOME/claude/claude-workspace"

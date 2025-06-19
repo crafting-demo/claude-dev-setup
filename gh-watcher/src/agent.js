@@ -44,25 +44,37 @@ export async function runDevAgent(payload, options) {
   if (dryRun) return;
 
   try {
-    console.log(`Executing sandbox creation command synchronously for ${kind} #${itemNumber}...`);
+    console.log(`Executing sandbox creation command for ${kind} #${itemNumber}...`);
     
-    // Wait for sandbox creation to complete
+    // Wait for sandbox creation to complete with real-time output streaming
     await new Promise((resolve, reject) => {
-      const child = exec(cmd, { timeout: 120000 }, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Sandbox creation failed for ${kind} #${itemNumber}: ${error.message}`);
-          if (stdout) console.log(`Sandbox stdout: ${stdout}`);
-          if (stderr) console.error(`Sandbox stderr: ${stderr}`);
-          reject(error);
-          return;
+      const child = exec(cmd, { timeout: 120000 });
+      
+      // Stream stdout in real-time
+      child.stdout.on('data', (data) => {
+        process.stdout.write(data);
+      });
+      
+      // Stream stderr in real-time
+      child.stderr.on('data', (data) => {
+        process.stderr.write(data);
+      });
+      
+      // Handle completion
+      child.on('close', (code) => {
+        if (code === 0) {
+          console.log(`\nSandbox creation completed successfully for ${kind} #${itemNumber}`);
+          resolve({ code });
+        } else {
+          console.error(`\nSandbox creation failed for ${kind} #${itemNumber} with exit code: ${code}`);
+          reject(new Error(`Sandbox creation failed with exit code: ${code}`));
         }
-        
-        // Always surface output for debugging
-        console.log(`Sandbox creation completed successfully for ${kind} #${itemNumber}`);
-        if (stdout) console.log(`Sandbox stdout: ${stdout}`);
-        if (stderr) console.log(`Sandbox stderr: ${stderr}`);
-        
-        resolve({ stdout, stderr });
+      });
+      
+      // Handle errors
+      child.on('error', (error) => {
+        console.error(`\nSandbox creation failed for ${kind} #${itemNumber}: ${error.message}`);
+        reject(error);
       });
       
       // Safety timeout (2 minutes)
@@ -87,20 +99,30 @@ export async function runDevAgent(payload, options) {
     console.log(`Transferring prompt file to sandbox: ${scpCmd}`);
     
     await new Promise((resolve, reject) => {
-      exec(scpCmd, { timeout: 30000 }, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`File transfer failed for ${kind} #${itemNumber}: ${error.message}`);
-          if (stdout) console.log(`SCP stdout: ${stdout}`);
-          if (stderr) console.error(`SCP stderr: ${stderr}`);
-          reject(error);
-          return;
+      const child = exec(scpCmd, { timeout: 30000 });
+      
+      // Stream output for file transfer (usually minimal but good for debugging)
+      child.stdout.on('data', (data) => {
+        process.stdout.write(`[SCP] ${data}`);
+      });
+      
+      child.stderr.on('data', (data) => {
+        process.stderr.write(`[SCP] ${data}`);
+      });
+      
+      child.on('close', (code) => {
+        if (code === 0) {
+          console.log(`File transfer completed successfully for ${kind} #${itemNumber}`);
+          resolve({ code });
+        } else {
+          console.error(`File transfer failed for ${kind} #${itemNumber} with exit code: ${code}`);
+          reject(new Error(`File transfer failed with exit code: ${code}`));
         }
-        
-        console.log(`File transfer completed successfully for ${kind} #${itemNumber}`);
-        if (stdout) console.log(`SCP stdout: ${stdout}`);
-        if (stderr) console.log(`SCP stderr: ${stderr}`);
-        
-        resolve({ stdout, stderr });
+      });
+      
+      child.on('error', (error) => {
+        console.error(`File transfer failed for ${kind} #${itemNumber}: ${error.message}`);
+        reject(error);
       });
     });
 
@@ -112,81 +134,49 @@ export async function runDevAgent(payload, options) {
       console.warn(`Failed to clean up prompt file: ${err.message}`);
     }
 
-    // Transfer dev-worker scripts to the sandbox
-    const devWorkerCopyCmd = `cs scp -r ./dev-worker ${extractedSandboxName}:/home/owner/claude/`;
-    console.log(`Transferring dev-worker scripts: ${devWorkerCopyCmd}`);
-    
-    await new Promise((resolve, reject) => {
-      exec(devWorkerCopyCmd, { timeout: 30000 }, (error, stdout, stderr) => {
-        if (error) {
-          console.error(`Dev-worker transfer failed for ${kind} #${itemNumber}: ${error.message}`);
-          if (stdout) console.log(`Dev-worker SCP stdout: ${stdout}`);
-          if (stderr) console.error(`Dev-worker SCP stderr: ${stderr}`);
-          reject(error);
-          return;
-        }
-        
-        console.log(`Dev-worker scripts transferred successfully for ${kind} #${itemNumber}`);
-        if (stdout) console.log(`Dev-worker SCP stdout: ${stdout}`);
-        if (stderr) console.log(`Dev-worker SCP stderr: ${stderr}`);
-        
-        resolve({ stdout, stderr });
-      });
-    });
-
-    // Execute initialize_worker.sh in the sandbox
+        // Execute initialize_worker.sh in the sandbox
     const execCmd = `cs exec -W ${extractedSandboxName}/claude -- ~/claude/dev-worker/initialize_worker.sh`;
     console.log(`Firing off worker initialization: ${execCmd}`);
     
-    if (options.debug) {
-      console.log(`DEBUG MODE: Waiting for worker initialization to complete...`);
+    console.log(`Executing worker initialization with full output visibility...`);
+    
+    // Always wait for completion and show all output with real-time streaming
+    await new Promise((resolve, reject) => {
+      const child = exec(execCmd, { timeout: 600000 });
       
-      // In debug mode, wait for completion and show all output
-      await new Promise((resolve, reject) => {
-        const child = exec(execCmd, { timeout: 600000 }, (error, stdout, stderr) => {
-          if (error) {
-            console.error(`Worker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
-            if (stdout) console.log(`Worker stdout:\n${stdout}`);
-            if (stderr) console.error(`Worker stderr:\n${stderr}`);
-            reject(error);
-            return;
-          }
-          
-          console.log(`Worker initialization completed for ${kind} #${itemNumber}`);
-          if (stdout) console.log(`Worker stdout:\n${stdout}`);
-          if (stderr) console.log(`Worker stderr:\n${stderr}`);
-          resolve({ stdout, stderr });
-        });
-        
-        // 10 minute timeout for debug mode
-        setTimeout(() => {
-          child.kill();
-          reject(new Error('Worker initialization timed out after 10 minutes'));
-        }, 600000);
+      // Stream stdout in real-time
+      child.stdout.on('data', (data) => {
+        process.stdout.write(data);
       });
       
-      console.log(`DEBUG: Worker initialization completed successfully`);
+      // Stream stderr in real-time
+      child.stderr.on('data', (data) => {
+        process.stderr.write(data);
+      });
       
-    } else {
-      // Normal mode: fire and forget
-      const child = exec(execCmd, { 
-        detached: true,
-        stdio: 'ignore'
-      }, (error, stdout, stderr) => {
-        // This callback will run eventually, but we don't wait for it
-        if (error) {
-          console.error(`Worker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
+      // Handle completion
+      child.on('close', (code) => {
+        if (code === 0) {
+          console.log(`\nWorker initialization completed successfully for ${kind} #${itemNumber}`);
+          resolve({ code });
         } else {
-          console.log(`Worker initialization completed for ${kind} #${itemNumber}`);
+          console.error(`\nWorker initialization failed for ${kind} #${itemNumber} with exit code: ${code}`);
+          reject(new Error(`Worker initialization failed with exit code: ${code}`));
         }
-        if (stdout) console.log(`Worker stdout: ${stdout}`);
-        if (stderr) console.log(`Worker stderr: ${stderr}`);
       });
-
-      // Completely detach the process so it continues running independently
-      child.unref();
-      console.log(`Worker initialization started in background for ${kind} #${itemNumber}`);
-    }
+      
+      // Handle errors
+      child.on('error', (error) => {
+        console.error(`\nWorker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
+        reject(error);
+      });
+      
+      // 10 minute timeout
+      setTimeout(() => {
+        child.kill();
+        reject(new Error('Worker initialization timed out after 10 minutes'));
+      }, 600000);
+    });
 
     const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
     await octokit.issues.createComment({
