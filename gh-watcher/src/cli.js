@@ -1,6 +1,5 @@
 import yargs from 'yargs';
 import { hideBin } from 'yargs/helpers';
-import { execSync } from 'node:child_process';
 import { scanIssues } from './issue-scan.js';
 import { scanPRs } from './pr-scan.js';
 import { loadState, saveState } from './state.js';
@@ -30,10 +29,6 @@ async function main() {
 
   try {
     console.log('Starting GitHub watcher...');
-    
-    console.log('Authenticating with sandbox service...');
-    execSync('cs login');
-    console.log('Authentication successful.');
 
     const state = loadState();
 
