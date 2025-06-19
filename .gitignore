@@ -11,3 +11,4 @@
 # Production
 build/
 dist/ 
+gh-watcher/node_modules/*
