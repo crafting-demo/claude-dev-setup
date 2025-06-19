@@ -132,7 +132,7 @@ if command_exists claude; then
         print_success "🎉 Claude Code setup completed successfully!"
         echo
         print_status "Next steps:"
-        echo "  1. Navigate to your workspace: cd ~/claude-workspace"
+        echo "  1. Navigate to your workspace: cd ~/claude/claude-workspace"
         echo "  2. Test Claude Code: claude --version"
         echo "  3. Start using Claude Code: claude"
         echo
@@ -169,7 +169,7 @@ print_success "🎉 Claude Code setup completed successfully!"
 echo
 print_status "Next steps:"
 echo "  1. Restart your terminal or run: source ~/.bashrc"
-echo "  2. Navigate to your workspace: cd ~/claude-workspace"
+echo "  2. Navigate to your workspace: cd ~/claude/claude-workspace"
 echo "  3. Test Claude Code: claude --version"
 echo "  4. Start using Claude Code: claude"
 echo

@@ -3,4 +3,5 @@ hooks:
     cmd: |
       export PATH="$HOME/.npm-global/bin:$PATH"
       export CLI_SCRIPT=y
-      mkdir -p "$HOME/claude-workspace"
+      mkdir -p "$HOME/claude"
+      mkdir -p "$HOME/claude/claude-workspace"
