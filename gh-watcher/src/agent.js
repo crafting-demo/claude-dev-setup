@@ -1,5 +1,5 @@
 import { exec } from 'node:child_process';
-import { GITHUB_TOKEN } from './config.js';
+import { GITHUB_TOKEN, TRIGGER_PHRASE } from './config.js';
 import { octokit } from './github.js';
 
 export async function runDevAgent(payload, options) {
@@ -18,9 +18,11 @@ export async function runDevAgent(payload, options) {
   -D 'claude/env[CLAUDE_PROMPT]=\${prompt}' \\
   -D 'claude/env[GITHUB_TOKEN]=\${GITHUB_TOKEN}' \\
   -D 'claude/env[ACTION_TYPE]=\${kind}' \\
+  -D 'claude/env[TRIGGER_PHRASE]=\${triggerPhrase}' \\
   -D 'claude/env[PR_NUMBER]=\${prNumber}' \\
   -D 'claude/env[FILE_PATH]=\${filePath}' \\
   -D 'claude/env[LINE_NUMBER]=\${lineNumber}' \\
+  -D 'claude/env[SHOULD_DELETE]=\${shouldDelete}' \\
   -D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`;
 
   // Escape the prompt to handle special characters in the shell
@@ -32,9 +34,11 @@ export async function runDevAgent(payload, options) {
     .replace(/\${repo}/g, repo)
     .replace(/\${prompt}/g, escapedPrompt)
     .replace(/\${kind}/g, kind)
+    .replace(/\${triggerPhrase}/g, TRIGGER_PHRASE)
     .replace(/\${prNumber}/g, prNumber || '')
     .replace(/\${filePath}/g, filePath || '')
     .replace(/\${lineNumber}/g, lineNumber || '')
+    .replace(/\${shouldDelete}/g, 'false')
     .replace(/\${GITHUB_TOKEN}/g, GITHUB_TOKEN);
 
   console.log(`[${dryRun ? 'DRY RUN' : 'ACTION'}] Dev agent command prepared.`);

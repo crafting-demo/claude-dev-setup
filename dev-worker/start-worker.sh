@@ -348,13 +348,16 @@ EOF
 elif [ "$ACTION_TYPE" = "pr_comment" ]; then
     print_status "Updating existing PR #$PR_NUMBER..."
     
+    # Sanitize the prompt for the comment to prevent feedback loops
+    PROMPT_FOR_COMMENT=$(echo "$FINAL_PROMPT" | sed "s/$TRIGGER_PHRASE//g")
+
     # Create comment body
     cat > /tmp/comment_body.txt << EOF
 🤖 Claude Code automation has updated this PR with new changes.
 
 ## Prompt executed:
 \`\`\`
-$FINAL_PROMPT
+$PROMPT_FOR_COMMENT
 \`\`\`
 
 ## Latest changes:
