@@ -135,7 +135,7 @@ export async function runDevAgent(payload, options) {
     }
 
         // Execute initialize_worker.sh in the sandbox
-    const execCmd = `cs exec -u 1000 -W ${extractedSandboxName}/claude -- bash -i -c '~/claude/dev-worker/initialize_worker.sh'`;
+    const execCmd = `cs exec -t -u 1000 -W ${extractedSandboxName}/claude -- bash -i -c '~/claude/dev-worker/initialize_worker.sh'`;
     console.log(`Firing off worker initialization: ${execCmd}`);
     
     console.log(`Executing worker initialization with full output visibility...`);
