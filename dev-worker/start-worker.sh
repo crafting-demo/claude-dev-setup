@@ -63,7 +63,7 @@ echo "ACTION_TYPE: $ACTION_TYPE"
 echo "PR_NUMBER: $PR_NUMBER"
 echo "FILE_PATH: $FILE_PATH"
 echo "LINE_NUMBER: $LINE_NUMBER"
-echo "ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY"
+echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[not set]")"
 
 # Validate required environment variables
 print_status "Validating environment variables..."
@@ -297,13 +297,13 @@ fi
 
 # Test Claude Code with a simple hello command  
 print_status "Testing Claude Code with a simple command..."
-if timeout 30 claude -p "Say hello" --verbose 2>&1; then
+if claude -p "Say hello" --verbose 2>&1; then
     print_success "Claude test command succeeded"
 else
     EXIT_CODE=$?
     print_error "Claude test command failed with exit code: $EXIT_CODE"
     if [ $EXIT_CODE -eq 124 ]; then
-        print_error "Command timed out after 30 seconds - likely hanging on auth or input"
+        print_error "Command timed out - likely hanging on auth or input"
         print_error "Maybe Claude needs manual authentication first?"
     fi
     print_error "Trying claude config status to check auth..."
