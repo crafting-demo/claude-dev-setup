@@ -1,0 +1,12 @@
+workspaces:
+  - name: claude
+    checkouts:
+      - path: claude
+        repo:
+          git: git@github.com:crafting-demo/claude-dev-setup.git
+        manifest:
+          overlays:
+            - file: dev-worker/.sandbox/manifest.yaml
+    env:
+      - SHELL=/bin/bash
+      - PATH=/usr/local/go/bin:/usr/local/node/bin:$PATH      

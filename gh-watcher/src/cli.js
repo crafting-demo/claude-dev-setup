@@ -48,6 +48,7 @@ async function main() {
     }
 
     console.log('GitHub watcher run completed.');
+    process.exit(0);
   } catch (error) {
     console.error('An error occurred during watcher run:', error);
     process.exit(1);

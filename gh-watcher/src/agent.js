@@ -5,13 +5,16 @@ import { octokit } from './github.js';
 
 export async function runDevAgent(payload, options) {
   const { owner, repo, kind, prompt, issueNumber, prNumber, filePath, lineNumber } = payload;
-  const { dryRun, verbose } = options;
+  const { dryRun, verbose, debug } = options;
 
   // Create a unique sandbox name that is less than 20 chars
   const repoName = repo.split('/')[1] || 'repo';
   const timestamp = Date.now().toString().slice(-4);
   const itemNumber = issueNumber || prNumber;
   const sandboxName = `cw-${repoName.substring(0,8)}-${itemNumber}-${timestamp}`.substring(0, 20);
+
+  // Determine if the worker should be destroyed after completion
+  const shouldDelete = debug ? 'false' : 'true';
 
   // Hardcoded command template (prompt now passed via file, not env var)
   const commandTemplate = `cs sandbox create \${sandboxName} \\
@@ -35,7 +38,7 @@ export async function runDevAgent(payload, options) {
     .replace(/\${prNumber}/g, prNumber || '')
     .replace(/\${filePath}/g, filePath || '')
     .replace(/\${lineNumber}/g, lineNumber || '')
-    .replace(/\${shouldDelete}/g, 'false')
+    .replace(/\${shouldDelete}/g, shouldDelete)
     .replace(/\${GITHUB_TOKEN}/g, GITHUB_TOKEN);
 
   console.log(`[${dryRun ? 'DRY RUN' : 'ACTION'}] Dev agent command prepared.`);
@@ -134,58 +137,56 @@ export async function runDevAgent(payload, options) {
       console.warn(`Failed to clean up prompt file: ${err.message}`);
     }
 
-        // Execute initialize_worker.sh in the sandbox
+    // Execute initialize_worker.sh in the sandbox
     const execCmd = `cs exec -t -u 1000 -W ${extractedSandboxName}/claude -- bash -i -c '~/claude/dev-worker/initialize_worker.sh'`;
     console.log(`Firing off worker initialization: ${execCmd}`);
     
-    console.log(`Executing worker initialization with full output visibility...`);
-    
-    // Always wait for completion and show all output with real-time streaming
-    await new Promise((resolve, reject) => {
-      const child = exec(execCmd, { timeout: 600000 });
-      
-      // Stream stdout in real-time
-      child.stdout.on('data', (data) => {
-        process.stdout.write(data);
+    if (debug) {
+      // In debug mode, wait for completion and show all output
+      console.log(`DEBUG MODE: Waiting for worker initialization to complete...`);
+      await new Promise((resolve, reject) => {
+        const child = exec(execCmd, { timeout: 600000 });
+        child.stdout.on('data', (data) => { process.stdout.write(data); });
+        child.stderr.on('data', (data) => { process.stderr.write(data); });
+        child.on('close', (code) => {
+          if (code === 0) {
+            console.log(`\nWorker initialization completed successfully for ${kind} #${itemNumber}`);
+            resolve({ code });
+          } else {
+            console.error(`\nWorker initialization failed for ${kind} #${itemNumber} with exit code: ${code}`);
+            reject(new Error(`Worker initialization failed with exit code: ${code}`));
+          }
+        });
+        child.on('error', (error) => {
+          console.error(`\nWorker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
+          reject(error);
+        });
+        setTimeout(() => {
+          child.kill();
+          reject(new Error('Worker initialization timed out after 10 minutes'));
+        }, 600000);
       });
-      
-      // Stream stderr in real-time
-      child.stderr.on('data', (data) => {
-        process.stderr.write(data);
+      const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
+      await octokit.issues.createComment({
+        owner,
+        repo,
+        issue_number: itemNumber,
+        body: resultMessage,
       });
-      
-      // Handle completion
-      child.on('close', (code) => {
-        if (code === 0) {
-          console.log(`\nWorker initialization completed successfully for ${kind} #${itemNumber}`);
-          resolve({ code });
-        } else {
-          console.error(`\nWorker initialization failed for ${kind} #${itemNumber} with exit code: ${code}`);
-          reject(new Error(`Worker initialization failed with exit code: ${code}`));
-        }
+      console.log(`Posted success comment to #${itemNumber}. Worker initialization running in background.`);
+    } else {
+      // In non-debug mode, fire and forget (do not wait for logs)
+      console.log(`Non-debug mode: launching worker and disconnecting (not waiting for logs).`);
+      exec(execCmd, { timeout: 600000 });
+      const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
+      await octokit.issues.createComment({
+        owner,
+        repo,
+        issue_number: itemNumber,
+        body: resultMessage,
       });
-      
-      // Handle errors
-      child.on('error', (error) => {
-        console.error(`\nWorker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
-        reject(error);
-      });
-      
-      // 10 minute timeout
-      setTimeout(() => {
-        child.kill();
-        reject(new Error('Worker initialization timed out after 10 minutes'));
-      }, 600000);
-    });
-
-    const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
-    await octokit.issues.createComment({
-      owner,
-      repo,
-      issue_number: itemNumber,
-      body: resultMessage,
-    });
-    console.log(`Posted success comment to #${itemNumber}. Worker initialization running in background.`);
+      console.log(`Posted success comment to #${itemNumber}. Worker initialization running in background.`);
+    }
 
   } catch (error) {
     const resultMessage = `❌ Dev agent sandbox creation failed for ${kind} #${itemNumber}: ${error.message}`;
