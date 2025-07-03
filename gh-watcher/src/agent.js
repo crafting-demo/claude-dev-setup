@@ -145,7 +145,7 @@ export async function runDevAgent(payload, options) {
       // In debug mode, wait for completion and show all output
       console.log(`DEBUG MODE: Waiting for worker initialization to complete...`);
       await new Promise((resolve, reject) => {
-        const child = exec(execCmd, { timeout: 600000 });
+        const child = exec(execCmd);
         child.stdout.on('data', (data) => { process.stdout.write(data); });
         child.stderr.on('data', (data) => { process.stderr.write(data); });
         child.on('close', (code) => {
@@ -161,10 +161,6 @@ export async function runDevAgent(payload, options) {
           console.error(`\nWorker initialization failed for ${kind} #${itemNumber}: ${error.message}`);
           reject(error);
         });
-        setTimeout(() => {
-          child.kill();
-          reject(new Error('Worker initialization timed out after 10 minutes'));
-        }, 600000);
       });
       const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
       await octokit.issues.createComment({
@@ -177,7 +173,7 @@ export async function runDevAgent(payload, options) {
     } else {
       // In non-debug mode, fire and forget (do not wait for logs)
       console.log(`Non-debug mode: launching worker and disconnecting (not waiting for logs).`);
-      exec(execCmd, { timeout: 600000 });
+      exec(execCmd);
       const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
       await octokit.issues.createComment({
         owner,

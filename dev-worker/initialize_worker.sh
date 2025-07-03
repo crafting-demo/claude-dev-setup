@@ -41,11 +41,12 @@ print_status "Step 1: Setting up Claude Code..."
 if [ -f "$SCRIPT_DIR/setup-claude.sh" ]; then
     print_status "Sourcing setup-claude.sh to preserve PATH..."
     source "$SCRIPT_DIR/setup-claude.sh"
+    print_status "*** GCP Vertex AI API Detected... ***"
     print_success "Claude Code setup completed"
     
     # Ensure PATH includes Claude Code after installation (should already be set by sourced script)
     export PATH="$HOME/.npm-global/bin:$PATH"
-    print_status "PATH confirmed: $PATH"
+    print_status "PATH confirmed: $PATH"    
     
     # Verify Claude Code is accessible
     print_status "Testing Claude Code accessibility..."
