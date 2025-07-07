@@ -36,9 +36,5 @@ Follow the instructions below to use Verex AI
 - CLAUDE_CODE_USE_VERTEX=1
 - CLOUD_ML_REGION=us-east5
 
-
-
 To do:
-- Debug mode in watcher should: 1. Make sure should destroy flag passed into workers is false. 2. Make sure the watcher stays connected to the workers so progress is visible (which is how it's currently configured). When debug mode is disabled, it should not stay connected to the worker after the command is executed successfully so it doens't get blocked on the log running `initialize_worker.sh` script.
-
 - Include instructions on how to get this to run as a repeating timed job in a pinned sandbox.
