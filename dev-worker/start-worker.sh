@@ -63,6 +63,8 @@ echo "ACTION_TYPE: $ACTION_TYPE"
 echo "PR_NUMBER: $PR_NUMBER"
 echo "FILE_PATH: $FILE_PATH"
 echo "LINE_NUMBER: $LINE_NUMBER"
+echo "SHOULD_DELETE: $SHOULD_DELETE"
+echo "SANDBOX_NAME: $SANDBOX_NAME"
 echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[not set]")"
 
 # Validate required environment variables
@@ -424,4 +426,23 @@ if [ "$ACTION_TYPE" = "pr_comment" ]; then
 fi
 echo "  Changes: Committed and pushed"
 echo
-print_success "🎉 Workflow completed successfully!" 
+print_success "🎉 Workflow completed successfully!"
+
+# Cleanup logic based on SHOULD_DELETE environment variable
+if [ "$SHOULD_DELETE" = "true" ]; then
+    print_status "Non-debug mode: Initiating sandbox cleanup..."
+    if [ -n "$SANDBOX_NAME" ]; then
+        print_status "Deleting sandbox: $SANDBOX_NAME"
+        if cs sandbox remove "$SANDBOX_NAME" --force; then
+            print_success "Sandbox deleted successfully"
+        else
+            print_error "Failed to delete sandbox: $SANDBOX_NAME"
+            # Don't exit with error - the main work is done
+        fi
+    else
+        print_warning "SANDBOX_NAME not set, cannot delete sandbox"
+    fi
+else
+    print_status "Debug mode: Keeping sandbox alive for debugging..."
+    print_status "Sandbox name: $SANDBOX_NAME"
+fi 
