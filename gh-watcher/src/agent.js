@@ -172,8 +172,12 @@ export async function runDevAgent(payload, options) {
       console.log(`Posted success comment to #${itemNumber}. Worker initialization running in background.`);
     } else {
       // In non-debug mode, fire and forget (do not wait for logs)
-      console.log(`Non-debug mode: launching worker and disconnecting (not waiting for logs).`);
-      exec(execCmd);
+      console.log(`Non-debug mode: launching worker in background with setsid nohup.`);
+      const logFile = `./worker-${sandboxName}-${Date.now()}.log`;
+      const backgroundCmd = `setsid nohup ${execCmd} >${logFile} 2>&1 &`;
+      console.log(`Background command: ${backgroundCmd}`);
+      console.log(`Logs will be written to: ${logFile}`);
+      exec(backgroundCmd);
       const resultMessage = `🚀 Dev agent sandbox created, prompt transferred, and worker started for ${kind} #${itemNumber}. Processing in background...`;
       await octokit.issues.createComment({
         owner,

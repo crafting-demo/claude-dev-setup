@@ -31,7 +31,7 @@ Follow the instructions below to use Verex AI
 2. Create a GCP service account with roles: `AI Platform Developer` and `Vertex AI User`. 
 3. Create a JSON key and add it as a secret in Crafting, ex `gcp-vertex-key.json`
 4. Add the following env vars to `claude-code-automation/template.yaml`:
-- GOOGLE_APPLICATION_CREDENTIALS="/run/sandbox/fs/secrets/shared/gcp-vertex-key.json"
+- GOOGLE_APPLICATION_CREDENTIALS=/run/sandbox/fs/secrets/shared/gcp-vertex-key.json
 - ANTHROPIC_VERTEX_PROJECT_ID=YOUR-GCP-PROJECT-ID
 - CLAUDE_CODE_USE_VERTEX=1
 - CLOUD_ML_REGION=us-east5
