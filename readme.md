@@ -6,7 +6,8 @@ This repo contains everything you need to setup a dev agent that uses Claude Cod
 - Issues -> PRs. Assign open issues to the dev agent and it will pull down the repo, cut a branch, do the work and open a PR against that issue.
 - PR comments -> Branch updates. Tag the dev agent in a PR comment with feedback and it will do the work and push an update to that PR.
 - Full support for Claude models on GCP through Vertex AI
-- Crafting native. All work happens within ephemeral sandboxes on your Crafting account.
+- Supports multiple concurrent background agents
+- Crafting native. All work happens within sandboxes on your Crafting account.
 
 ## Demo
 <a href="https://www.loom.com/share/9832c4c481794c1d9a707c3c435f1b81">
