@@ -1,9 +1,6 @@
 hooks:
   build:
     cmd: ./gh-watcher/npm install
-packages:
-  - name: nodejs
-    version: '18'
 jobs:
   gh-poll:
     run:                      # standard Run-schema block
