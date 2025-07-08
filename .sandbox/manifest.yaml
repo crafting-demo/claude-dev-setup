@@ -1,6 +1,6 @@
 hooks:
   build:
-    cmd: ./gh-watcher/npm install
+    cmd: cd gh-watcher && npm install
 jobs:
   gh-poll:
     run:                      # standard Run-schema block
