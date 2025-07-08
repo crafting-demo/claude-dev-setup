@@ -1,15 +1,45 @@
-# Setup
+# Claude Code Dev Agent on Crafting
 
-1. In your Crafting dashboard, create a new template named `claude-code-automation` using the `template.yaml` file in `claude-code-automation` directory. 
-2. Create the dev agent orchestrator sandbox from scratch. Make sure to properly configure your own `ANTHROPIC_API_KEY` secret path for the the ENV. Alternatively, if you wish to use Claude models running within GCP, follow the instructions below for Vertex AI.
-3. Clone this repo.
-4. Go to GitHub and generate a Personal Access Token (PAT) for the repos you would like your dev agent to have access to. Make sure it has access to Actions, Contents, Issues, Pull Requests. Set the PAT as the `GITHUB_TOKEN` env var
-5. In `claude-dev-setup/gh-watcher/watchlist.txt`, add all the repos you want your dev agent to monitor. One per line. Ex. `crafting-test1/claude_test`.
-6. In `claude-dev-setup/gh-watcher`, run `npm install`
-7. Set the trigger phrase you would like to monitor for in the comments of your GitHub issues and Pull Requests. Edit `claude-dev-setup/gh-watcher/src/config.js` or using env var `TRIGGER_PHRASE`. Ex. `@crafting-code`
-8. In `claude-dev-setup/gh-watcher`, run `npm run watch` to perform a single a poll of the repos specified in your watchlist.
+This repo contains everything you need to setup a dev agent that uses Claude Code to interact with issues and PR comments in a GitHub repo.
 
-Once a comment is found in a PR or issues containing the trigger phase, your orchestrator sandbox will spin up a worker sandbox using the `claude-code-automation` template, which will take the following steps.
+## Features
+- Issues -> PRs. Assign open issues to the dev agent and it will pull down the repo, cut a branch, do the work and open a PR against that issue.
+- PR comments -> Branch updates. Tag the dev agent in a PR comment with feedback and it will do the work and push an update to that PR.
+- Full support for Claude models on GCP through Vertex AI
+- Crafting native. All work happens within ephemeral sandboxes on your Crafting account.
+
+## Demo
+
+
+## Sandbox Setup
+
+1. **Create the Claude Code Worker Template** In your Crafting dashboard, create a new template named `claude-code-automation` using the `template.yaml` file in `claude-code-automation` directory. 
+2. **Ensure the following Env vars are set** in the sandbox you want the dev agent orchestrator to work within.
+- **ANTHROPIC_API_KEY**: A path to your Anthropic API Key stored in a Crafting secret. Alternatively, if you wish to use Claude models running within GCP, follow the instructions below for Vertex AI.
+- **GITHUB_TOKEN**: A PAT that will provide the dev agent access to the repo you wan it to work on. To generate one, to GitHub and generate a Personal Access Token (PAT) for the repos you would like your dev agent to have access to. Make sure it has access to Actions, Contents, Issues, Pull Requests.
+3. **Update your sandbox YAML** to create a workspace configured for the orchestrator. Add the following under `workspaces`:
+```
+- name: cc-launcher
+    checkouts:
+      - path: claude-dev-setup
+        repo:
+          git: https://github.com/crafting-demo/claude-dev-setup.git
+    packages:
+      - name: nodejs
+        version: 22.14.0 # or some version over 20
+    env:
+      - SHELL=/bin/bash
+      - PATH=/usr/local/go/bin:/usr/local/node/bin:$PATH
+```
+
+5. **Add target repos** Inside the cc-launcher workspace, go to `claude-dev-setup/gh-watcher/watchlist.txt` and add all the repos you want your dev agent to monitor. One per line. Ex. `crafting-test1/claude_test`.
+7. (optional) **Set the trigger phrase*** you would like to monitor for in the comments of your GitHub issues and Pull Requests. Edit `claude-dev-setup/gh-watcher/src/config.js` or using env var `TRIGGER_PHRASE`. Ex. `@crafting-code`
+8. **Pin your sandbox** so the orchestrator timed job can continue to regularly poll GitHub. The default poll time is every 5 minutes, but you can change that in `./sandbox/manifest.yaml`.
+
+## How it works
+
+Once a comment is found in a PR or issues containing the trigger phase (default is **@crafting-code**), the orchestrator will spin up a worker sandbox using the `claude-code-automation` template, which will take the following steps.
+
 1. Install Claude Code, configured with your API Key (passed in from the Orchestrator as an env var), and give permissions for tool use.
 2. Clone the target repo
 3. If the comment was on an issue, it will cut a new branch related to that issue. If the comment was on a PR, it will switch to that branch.
@@ -17,6 +47,9 @@ Once a comment is found in a PR or issues containing the trigger phase, your orc
 5. After Claude Code completes the work, it will commit changes and then: If Issue: Create a PR with a description of changes, or, if PR comment, push changes to the branch and leave a comment about updates.
 6. After changes are made, the action is logged is in `gh-watcher/state.json` so that work is not re-triggered in subsequent runs.
 7. If the orchestrator is not in debug mode, the dev worker will be destroyed upon completing it's task.
+
+## Debug mode
+You can run a dev worker synchronously by opening a terminal on the cc-launcher workspace, cd'ing to `claude-dev-setup/gh-watcher` and running `npm run watch -- --debug` to perform a single poll of the repos specified in your watchlist. Note: You will have to manually delete the worker sandbox yourself this way.
 
 ## Using Claude models inside of GCP with Vertex AI 
 
@@ -35,6 +68,3 @@ Follow the instructions below to use Verex AI
 - ANTHROPIC_VERTEX_PROJECT_ID=YOUR-GCP-PROJECT-ID
 - CLAUDE_CODE_USE_VERTEX=1
 - CLOUD_ML_REGION=us-east5
-
-To do:
-- Include instructions on how to get this to run as a repeating timed job in a pinned sandbox.
