@@ -9,6 +9,9 @@ This repo contains everything you need to setup a dev agent that uses Claude Cod
 - Crafting native. All work happens within ephemeral sandboxes on your Crafting account.
 
 ## Demo
+<a href="https://www.loom.com/share/9832c4c481794c1d9a707c3c435f1b81">
+  <img width="500" alt="Screenshot 2025-07-08 at 1 30 06 PM" src="https://github.com/user-attachments/assets/f15e263c-84e7-4919-b2c9-13ebf8fb93d6" />
+</a>
 
 
 ## Sandbox Setup
