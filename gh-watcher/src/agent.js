@@ -1,6 +1,6 @@
 import { exec } from 'node:child_process';
 import { writeFileSync, unlinkSync } from 'node:fs';
-import { GITHUB_TOKEN, TRIGGER_PHRASE } from './config.js';
+import { GITHUB_TOKEN, TRIGGER_PHRASE, USE_SANDBOX_POOL, SANDBOX_POOL_NAME } from './config.js';
 import { octokit } from './github.js';
 
 export async function runDevAgent(payload, options) {
@@ -16,9 +16,10 @@ export async function runDevAgent(payload, options) {
   // Determine if the worker should be destroyed after completion
   const shouldDelete = debug ? 'false' : 'true';
 
-  // Hardcoded command template (prompt now passed via file, not env var)
-  const commandTemplate = `cs sandbox create \${sandboxName} \\
-  -t claude-code-automation \\
+  // Build command template based on pool configuration
+  const baseCreateCmd = `cs sandbox create \${sandboxName} -t claude-code-automation`;
+  const poolOption = USE_SANDBOX_POOL === 1 ? ` --use-pool \${poolName}` : '';
+  const envVars = ` \\
   -D 'claude/env[GITHUB_REPO]=\${owner}/\${repo}' \\
   -D 'claude/env[GITHUB_TOKEN]=\${GITHUB_TOKEN}' \\
   -D 'claude/env[ACTION_TYPE]=\${kind}' \\
@@ -28,9 +29,12 @@ export async function runDevAgent(payload, options) {
   -D 'claude/env[LINE_NUMBER]=\${lineNumber}' \\
   -D 'claude/env[SHOULD_DELETE]=\${shouldDelete}' \\
   -D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`;
+  
+  const commandTemplate = baseCreateCmd + poolOption + envVars;
 
   const cmd = commandTemplate
     .replace(/\${sandboxName}/g, sandboxName)
+    .replace(/\${poolName}/g, SANDBOX_POOL_NAME)
     .replace(/\${owner}/g, owner)
     .replace(/\${repo}/g, repo)
     .replace(/\${kind}/g, kind)
