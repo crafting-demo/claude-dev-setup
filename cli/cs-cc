@@ -1,0 +1,396 @@
+#!/usr/bin/env node
+
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { exec } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve, isAbsolute } from 'node:path';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+function parseArguments() {
+  const args = process.argv.slice(2);
+  const parsed = { d: 'yes' }; // Set default for delete-when-done
+  
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    
+    if (arg === '--help') {
+      parsed.help = true;
+      continue;
+    }
+    
+    // Handle arguments that need values
+    if (arg.startsWith('-') && i + 1 < args.length) {
+      const value = args[i + 1];
+      
+      switch (arg) {
+        case '-p':
+        case '--prompt':
+          parsed.p = value;
+          i++;
+          break;
+        case '-pool':
+          parsed.pool = value;
+          i++;
+          break;
+        case '-r':
+        case '--repo':
+          parsed.r = value;
+          i++;
+          break;
+        case '-ght':
+        case '--github-token':
+          parsed.ght = value;
+          i++;
+          break;
+        case '-pr':
+        case '--pull-request':
+          parsed.pr = value;
+          i++;
+          break;
+        case '-i':
+        case '--issue':
+          parsed.i = value;
+          i++;
+          break;
+        case '-b':
+        case '--branch':
+          parsed.b = value;
+          i++;
+          break;
+        case '-mc':
+        case '--mcp-config':
+          parsed.mc = value;
+          i++;
+          break;
+        case '-lmc':
+        case '--local-mcp-config':
+          parsed.lmc = value;
+          i++;
+          break;
+        case '-t':
+        case '--tools':
+          parsed.t = value;
+          i++;
+          break;
+        case '-d':
+        case '--delete-when-done':
+          parsed.d = value;
+          i++;
+          break;
+        case '-n':
+        case '--name':
+          parsed.n = value;
+          i++;
+          break;
+        default:
+          throw new Error(`Unknown option: ${arg}`);
+      }
+    } else if (arg.startsWith('-')) {
+      throw new Error(`Option ${arg} requires a value`);
+    } else {
+      throw new Error(`Unexpected positional argument: ${arg}`);
+    }
+  }
+  
+  return parsed;
+}
+
+function showHelp() {
+  console.log(`
+cs-cc - Claude Sandbox Code CLI
+
+Usage: cs-cc [options]
+
+Options:
+  -p, --prompt <value>           Prompt string or file path (required)
+  -pool <name>                   Sandbox pool name (optional)
+  -r, --repo <owner/repo>        GitHub repository (required for GitHub integration)
+  -ght, --github-token <token>   GitHub access token (required for GitHub integration)
+  -pr, --pull-request <number>   Pull request number (mutually exclusive with -i, -b)
+  -i, --issue <number>           Issue number (mutually exclusive with -pr, -b)
+  -b, --branch <name>            Branch name (mutually exclusive with -pr, -i)
+  -mc, --mcp-config <value>      External MCP config string or file path (optional)
+  -lmc, --local-mcp-config <value> Local MCP tools config string or file path (optional)
+  -t, --tools <value>            Tool whitelist string or file path (optional)
+  -d, --delete-when-done <yes|no> Delete sandbox when done (default: yes)
+  -n, --name <name>              Sandbox name (default: auto-generated)
+  --help                         Show this help message
+
+Examples:
+  cs-cc -p "Fix the login bug" -r "owner/repo" -ght "ghp_token" -pr 123
+  cs-cc -p prompt.txt -r "owner/repo" -ght "ghp_token" -i 456 -mc external_mcp.txt
+  cs-cc -p "Implement feature" -pool my-pool -lmc local_tools.txt -t tool_whitelist.txt
+`);
+}
+
+function readFileOrString(value) {
+  if (!value) return '';
+  
+  // Check if it's a file path
+  const isFile = value.includes('/') || value.includes('\\') || value.endsWith('.txt') || value.endsWith('.json');
+  
+  if (isFile) {
+    const filePath = isAbsolute(value) ? value : resolve(process.cwd(), value);
+    if (!existsSync(filePath)) {
+      throw new Error(`File not found: ${filePath}`);
+    }
+    return readFileSync(filePath, 'utf8').trim();
+  }
+  
+  return value;
+}
+
+
+
+function validateArgs(args) {
+  const errors = [];
+  
+  // Validate required parameters
+  if (!args.p) {
+    errors.push('Prompt (-p) is required');
+  }
+  
+  // Validate mutually exclusive GitHub parameters
+  const githubParams = [args.pr, args.i, args.b].filter(Boolean);
+  if (githubParams.length > 1) {
+    errors.push('Only one of -pr, -i, or -b can be specified');
+  }
+  
+  // Validate GitHub integration parameters
+  if (args.r || args.ght || githubParams.length > 0) {
+    if (!args.r) errors.push('GitHub repo (-r) is required when using GitHub integration');
+    if (!args.ght) errors.push('GitHub token (-ght) is required when using GitHub integration');
+    if (githubParams.length === 0) {
+      errors.push('One of -pr, -i, or -b must be specified when using GitHub integration');
+    }
+  }
+  
+  // Validate delete-when-done parameter
+  if (args.d && !['yes', 'no'].includes(args.d.toLowerCase())) {
+    errors.push('Delete when done (-d) must be "yes" or "no"');
+  }
+  
+  if (errors.length > 0) {
+    throw new Error('Validation errors:\n' + errors.map(e => `  - ${e}`).join('\n'));
+  }
+}
+
+function generateSandboxName(args) {
+  if (args.n) {
+    return args.n;
+  }
+  
+  // Use existing naming logic from agent.js
+  const repoName = args.r ? args.r.split('/')[1] || 'repo' : 'sandbox';
+  const timestamp = Date.now().toString().slice(-4);
+  const itemNumber = args.pr || args.i || 'dev';
+  const sandboxName = `cw-${repoName.substring(0,8)}-${itemNumber}-${timestamp}`.substring(0, 20);
+  
+  return sandboxName;
+}
+
+async function transferFile(content, sandboxName, targetPath, description) {
+  if (!content) return;
+  
+  const tempFile = `./temp_${Date.now()}.txt`;
+  
+  try {
+    // Write content to temporary file
+    writeFileSync(tempFile, content, 'utf8');
+    
+    // Create target directory in sandbox first
+    const targetDir = targetPath.substring(0, targetPath.lastIndexOf('/'));
+    const mkdirCmd = `cs exec -t -u 1000 -W ${sandboxName}/claude -- mkdir -p ${targetDir}`;
+    console.log(`Creating directory in sandbox: ${targetDir}`);
+    
+    await new Promise((resolve, reject) => {
+      const child = exec(mkdirCmd, { timeout: 10000 });
+      
+      child.on('close', (code) => {
+        if (code === 0) {
+          resolve({ code });
+        } else {
+          reject(new Error(`Directory creation failed with exit code: ${code}`));
+        }
+      });
+      
+      child.on('error', (error) => {
+        reject(error);
+      });
+    });
+    
+    // Transfer file to sandbox
+    const scpCmd = `cs scp ${tempFile} ${sandboxName}:${targetPath}`;
+    console.log(`Transferring ${description} to sandbox: ${targetPath}`);
+    
+    await new Promise((resolve, reject) => {
+      const child = exec(scpCmd, { timeout: 30000 });
+      
+      child.stdout.on('data', (data) => {
+        process.stdout.write(`[SCP] ${data}`);
+      });
+      
+      child.stderr.on('data', (data) => {
+        process.stderr.write(`[SCP] ${data}`);
+      });
+      
+      child.on('close', (code) => {
+        if (code === 0) {
+          console.log(`${description} transfer completed successfully`);
+          resolve({ code });
+        } else {
+          console.error(`${description} transfer failed with exit code: ${code}`);
+          reject(new Error(`${description} transfer failed with exit code: ${code}`));
+        }
+      });
+      
+      child.on('error', (error) => {
+        console.error(`${description} transfer failed: ${error.message}`);
+        reject(error);
+      });
+    });
+    
+  } finally {
+    // Clean up temporary file
+    try {
+      unlinkSync(tempFile);
+    } catch (err) {
+      console.warn(`Failed to clean up temporary file: ${err.message}`);
+    }
+  }
+}
+
+async function createSandbox(args) {
+  try {
+    // Validate arguments
+    validateArgs(args);
+    
+    // Read file content for parameters that support files
+    const prompt = readFileOrString(args.p);
+    const mcpConfig = readFileOrString(args.mc);
+    const localMcpConfig = readFileOrString(args.lmc);
+    const toolWhitelist = readFileOrString(args.t);
+    
+    // Generate sandbox name
+    const sandboxName = generateSandboxName(args);
+    console.log(`Creating sandbox: ${sandboxName}`);
+    
+    // Build sandbox creation command
+    let cmd = `cs sandbox create ${sandboxName} -t claude-code-automation`;
+    
+    // Add pool option if specified
+    if (args.pool) {
+      cmd += ` --use-pool ${args.pool}`;
+    }
+    
+    // Add environment variables
+    const envVars = [];
+    
+    // GitHub integration variables
+    if (args.r && args.ght) {
+      envVars.push(`-D 'claude/env[GITHUB_REPO]=${args.r}'`);
+      envVars.push(`-D 'claude/env[GITHUB_TOKEN]=${args.ght}'`);
+      
+      if (args.pr) {
+        envVars.push(`-D 'claude/env[PR_NUMBER]=${args.pr}'`);
+        envVars.push(`-D 'claude/env[ACTION_TYPE]=pr'`);
+      } else if (args.i) {
+        envVars.push(`-D 'claude/env[ISSUE_NUMBER]=${args.i}'`);
+        envVars.push(`-D 'claude/env[ACTION_TYPE]=issue'`);
+      } else if (args.b) {
+        envVars.push(`-D 'claude/env[GITHUB_BRANCH]=${args.b}'`);
+        envVars.push(`-D 'claude/env[ACTION_TYPE]=branch'`);
+      }
+    }
+    
+    // Sandbox lifecycle variables
+    const shouldDelete = args.d.toLowerCase() === 'yes' ? 'true' : 'false';
+    envVars.push(`-D 'claude/env[SHOULD_DELETE]=${shouldDelete}'`);
+    
+    // Add Anthropic API key
+    envVars.push(`-D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`);
+    
+    if (envVars.length > 0) {
+      cmd += ' \\\n  ' + envVars.join(' \\\n  ');
+    }
+    
+    console.log(`Executing sandbox creation command...`);
+    console.log(`Command: ${cmd}`);
+    
+    // Execute sandbox creation
+    await new Promise((resolve, reject) => {
+      const child = exec(cmd, { timeout: 120000 });
+      
+      child.stdout.on('data', (data) => {
+        process.stdout.write(data);
+      });
+      
+      child.stderr.on('data', (data) => {
+        process.stderr.write(data);
+      });
+      
+      child.on('close', (code) => {
+        if (code === 0) {
+          console.log(`\nSandbox creation completed successfully`);
+          resolve({ code });
+        } else {
+          console.error(`\nSandbox creation failed with exit code: ${code}`);
+          reject(new Error(`Sandbox creation failed with exit code: ${code}`));
+        }
+      });
+      
+      child.on('error', (error) => {
+        console.error(`\nSandbox creation failed: ${error.message}`);
+        reject(error);
+      });
+    });
+    
+    console.log(`Sandbox is ready, proceeding with file transfers...`);
+    
+    // Transfer files to sandbox
+    await transferFile(prompt, sandboxName, '/home/owner/cmd/prompt.txt', 'prompt');
+    
+    if (mcpConfig) {
+      await transferFile(mcpConfig, sandboxName, '/home/owner/cmd/external_mcp.txt', 'external MCP config');
+    }
+    
+    if (localMcpConfig) {
+      await transferFile(localMcpConfig, sandboxName, '/home/owner/cmd/local_mcp_tools.txt', 'local MCP tools');
+    }
+    
+    if (toolWhitelist) {
+      await transferFile(toolWhitelist, sandboxName, '/home/owner/cmd/tool_whitelist.txt', 'tool whitelist');
+    }
+    
+    console.log(`\n🚀 Sandbox "${sandboxName}" created successfully with all configurations!`);
+    console.log(`\nNext steps:`);
+    console.log(`  1. Connect to sandbox: cs ssh ${sandboxName}`);
+    console.log(`  2. Initialize worker: ~/dev-worker/start-worker.sh`);
+    
+  } catch (error) {
+    console.error(`❌ cs-cc failed: ${error.message}`);
+    process.exit(1);
+  }
+}
+
+// Main execution
+async function main() {
+  try {
+    const args = parseArguments();
+    
+    if (args.help) {
+      showHelp();
+      process.exit(0);
+    }
+    
+    await createSandbox(args);
+    
+  } catch (error) {
+    console.error(`❌ ${error.message}`);
+    process.exit(1);
+  }
+}
+
+main(); 
