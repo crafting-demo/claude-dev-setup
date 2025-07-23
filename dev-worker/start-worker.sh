@@ -37,12 +37,13 @@ command_exists() {
 
 print_status "=== Claude Code Automation Workflow ==="
 
-# Read prompt from dev_prompt.txt file
-PROMPT_FILE="/home/owner/claude/claude-workspace/dev_prompt.txt"
-print_status "Reading prompt from file: $PROMPT_FILE"
+# Read prompt from cmd directory (cs-cc parameter system)
+PROMPT_FILE="$HOME/cmd/prompt.txt"
+print_status "Reading prompt from cs-cc parameter file: $PROMPT_FILE"
 
 if [ ! -f "$PROMPT_FILE" ]; then
     print_error "Prompt file not found: $PROMPT_FILE"
+    print_error "This should have been created by cs-cc CLI"
     exit 1
 fi
 
@@ -56,11 +57,13 @@ print_status "Prompt loaded successfully (${#CLAUDE_PROMPT} characters)"
 print_status "Prompt preview: $(echo "$CLAUDE_PROMPT" | head -c 100)..."
 
 # Debug: Print environment variables (safely)
-print_status "Environment variables:"
+print_status "Environment variables from cs-cc CLI:"
 echo "GITHUB_REPO: $GITHUB_REPO"
 echo "GITHUB_TOKEN: $([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")"
 echo "ACTION_TYPE: $ACTION_TYPE"
 echo "PR_NUMBER: $PR_NUMBER"
+echo "ISSUE_NUMBER: $ISSUE_NUMBER"
+echo "GITHUB_BRANCH: $GITHUB_BRANCH"
 echo "FILE_PATH: $FILE_PATH"
 echo "LINE_NUMBER: $LINE_NUMBER"
 echo "SHOULD_DELETE: $SHOULD_DELETE"
@@ -87,18 +90,28 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
     exit 1
 fi
 
-# Validate ACTION_TYPE and PR_NUMBER relationship
-if [ "$ACTION_TYPE" = "pr_comment" ] && [ -z "$PR_NUMBER" ]; then
-    print_error "PR_NUMBER is required when ACTION_TYPE=pr_comment"
+# Validate ACTION_TYPE and parameter relationships (cs-cc action types)
+if [ "$ACTION_TYPE" = "pr" ] && [ -z "$PR_NUMBER" ]; then
+    print_error "PR_NUMBER is required when ACTION_TYPE=pr"
     exit 1
 fi
 
-if [ "$ACTION_TYPE" = "pr_comment" ] && [ -n "$FILE_PATH" ]; then
-    print_status "PR Comment context: $FILE_PATH:$LINE_NUMBER"
+if [ "$ACTION_TYPE" = "issue" ] && [ -z "$ISSUE_NUMBER" ]; then
+    print_error "ISSUE_NUMBER is required when ACTION_TYPE=issue"
+    exit 1
 fi
 
-if [ "$ACTION_TYPE" != "issue" ] && [ "$ACTION_TYPE" != "pr_comment" ]; then
-    print_error "ACTION_TYPE must be 'issue' or 'pr_comment'"
+if [ "$ACTION_TYPE" = "branch" ] && [ -z "$GITHUB_BRANCH" ]; then
+    print_error "GITHUB_BRANCH is required when ACTION_TYPE=branch"
+    exit 1
+fi
+
+if [ "$ACTION_TYPE" = "pr" ] && [ -n "$FILE_PATH" ]; then
+    print_status "PR context: $FILE_PATH:$LINE_NUMBER"
+fi
+
+if [ "$ACTION_TYPE" != "issue" ] && [ "$ACTION_TYPE" != "pr" ] && [ "$ACTION_TYPE" != "branch" ]; then
+    print_error "ACTION_TYPE must be 'issue', 'pr', or 'branch'"
     exit 1
 fi
 
@@ -175,6 +188,92 @@ fi
 
 print_success "Required tools check passed"
 
+# Start local MCP server if configured
+print_status "Starting MCP server lifecycle management..."
+
+# Function to start local MCP server
+start_local_mcp_server() {
+    local local_mcp_config="$HOME/cmd/local_mcp_tools.txt"
+    local mcp_server_script="$HOME/claude/dev-worker/local_mcp_server/local-mcp-server.js"
+    
+    if [ -f "$local_mcp_config" ] && [ -s "$local_mcp_config" ]; then
+        print_status "Local MCP tools configuration found, starting local MCP server..."
+        
+        if [ ! -f "$mcp_server_script" ]; then
+            print_error "Local MCP server script not found at $mcp_server_script"
+            return 1
+        fi
+        
+        # Check if server is already running
+        if pgrep -f "local-mcp-server.js" > /dev/null; then
+            print_warning "Local MCP server already running, stopping previous instance"
+            pkill -f "local-mcp-server.js" || true
+            sleep 2
+        fi
+        
+        # Start the MCP server in background
+        print_status "Starting local MCP server at $mcp_server_script"
+        cd "$HOME/claude/dev-worker/local_mcp_server"
+        nohup node local-mcp-server.js > mcp-server.log 2>&1 &
+        MCP_SERVER_PID=$!
+        
+        # Give the server a moment to start
+        sleep 3
+        
+        # Verify the server started successfully
+        if kill -0 $MCP_SERVER_PID 2>/dev/null; then
+            print_success "Local MCP server started successfully (PID: $MCP_SERVER_PID)"
+            echo $MCP_SERVER_PID > "$HOME/cmd/mcp_server.pid"
+        else
+            print_error "Failed to start local MCP server"
+            print_status "Server logs:"
+            tail -10 mcp-server.log 2>/dev/null || echo "No logs available"
+            return 1
+        fi
+    else
+        print_status "No local MCP tools configuration found, skipping local MCP server startup"
+    fi
+}
+
+# Function to setup cleanup trap for MCP server
+setup_mcp_cleanup() {
+    # Function to cleanup MCP server on exit
+    cleanup_mcp_server() {
+        if [ -f "$HOME/cmd/mcp_server.pid" ]; then
+            local pid=$(cat "$HOME/cmd/mcp_server.pid")
+            print_status "Cleaning up MCP server (PID: $pid)..."
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+                sleep 2
+                # Force kill if still running
+                kill -9 "$pid" 2>/dev/null || true
+            fi
+            rm -f "$HOME/cmd/mcp_server.pid"
+            print_success "MCP server cleanup completed"
+        fi
+    }
+    
+    # Set trap to cleanup on script exit
+    trap cleanup_mcp_server EXIT
+}
+
+# Execute MCP server management
+setup_mcp_cleanup
+start_local_mcp_server
+
+# Verify MCP configuration is ready
+print_status "Verifying MCP configuration readiness..."
+if [ -f "$HOME/cmd/external_mcp.txt" ]; then
+    print_status "External MCP configuration available"
+fi
+if [ -f "$HOME/cmd/processed_tool_whitelist.txt" ]; then
+    print_status "Tool whitelist configuration available"
+    TOOL_COUNT=$(wc -l < "$HOME/cmd/processed_tool_whitelist.txt" 2>/dev/null || echo "0")
+    print_status "Tools available: $TOOL_COUNT"
+fi
+
+print_success "MCP server lifecycle management completed"
+
 # Configure GitHub CLI
 print_status "Configuring GitHub CLI..."
 if gh auth status >/dev/null 2>&1; then
@@ -192,11 +291,11 @@ else
     fi
 fi
 
-# Setup workspace
-WORKSPACE_DIR="/home/owner/claude/claude-workspace"
+# Setup workspace (using MCP-configured directory)
+WORKSPACE_DIR="/home/owner/claude"
 TARGET_REPO_DIR="$WORKSPACE_DIR/target-repo"
 
-print_status "Setting up workspace..."
+print_status "Setting up workspace in MCP-configured directory..."
 mkdir -p "$WORKSPACE_DIR"
 cd "$WORKSPACE_DIR"
 
@@ -253,22 +352,40 @@ EOF
 
 # Branch management based on action type
 if [ "$ACTION_TYPE" = "issue" ]; then
-    print_status "Creating new branch for issue workflow..."
-    BRANCH_NAME="claude-automation-$(date +%s)"
+    print_status "Creating new branch for issue #$ISSUE_NUMBER workflow..."
+    BRANCH_NAME="claude-issue-$ISSUE_NUMBER-$(date +%s)"
     git checkout -b "$BRANCH_NAME"
     print_success "Created new branch: $BRANCH_NAME"
     
-elif [ "$ACTION_TYPE" = "pr_comment" ]; then
-    print_status "Checking out existing PR branch..."
+elif [ "$ACTION_TYPE" = "pr" ]; then
+    print_status "Checking out existing PR #$PR_NUMBER branch..."
     gh pr checkout "$PR_NUMBER"
     BRANCH_NAME=$(git branch --show-current)
     print_success "Checked out PR branch: $BRANCH_NAME"
+    
+elif [ "$ACTION_TYPE" = "branch" ]; then
+    print_status "Checking out specified branch: $GITHUB_BRANCH"
+    if git checkout "$GITHUB_BRANCH" 2>/dev/null; then
+        print_success "Checked out existing branch: $GITHUB_BRANCH"
+    elif git checkout -b "$GITHUB_BRANCH" 2>/dev/null; then
+        print_success "Created and checked out new branch: $GITHUB_BRANCH"
+    else
+        print_error "Failed to checkout or create branch: $GITHUB_BRANCH"
+        exit 1
+    fi
+    BRANCH_NAME="$GITHUB_BRANCH"
 fi
 
 # Prepend context to the prompt if available
 FINAL_PROMPT="$CLAUDE_PROMPT"
-if [ "$ACTION_TYPE" = "pr_comment" ] && [ -n "$FILE_PATH" ]; then
-    CONTEXT_HEADER="The user has commented on \`$FILE_PATH\` at line \`$LINE_NUMBER\`."
+if [ "$ACTION_TYPE" = "pr" ] && [ -n "$FILE_PATH" ]; then
+    CONTEXT_HEADER="Working on PR #$PR_NUMBER, specifically \`$FILE_PATH\` at line \`$LINE_NUMBER\`."
+    FINAL_PROMPT="$CONTEXT_HEADER\n\n$CLAUDE_PROMPT"
+elif [ "$ACTION_TYPE" = "issue" ] && [ -n "$ISSUE_NUMBER" ]; then
+    CONTEXT_HEADER="Working on issue #$ISSUE_NUMBER."
+    FINAL_PROMPT="$CONTEXT_HEADER\n\n$CLAUDE_PROMPT"
+elif [ "$ACTION_TYPE" = "branch" ] && [ -n "$GITHUB_BRANCH" ]; then
+    CONTEXT_HEADER="Working on branch \`$GITHUB_BRANCH\`."
     FINAL_PROMPT="$CONTEXT_HEADER\n\n$CLAUDE_PROMPT"
 fi
 
@@ -361,12 +478,15 @@ fi
 
 # Handle PR creation/update based on action type
 if [ "$ACTION_TYPE" = "issue" ]; then
-    print_status "Creating new pull request..."
-    PR_TITLE="Claude Code: $(echo "$FINAL_PROMPT" | head -c 50)..."
+    print_status "Creating new pull request for issue #$ISSUE_NUMBER..."
+    PR_TITLE="Fix issue #$ISSUE_NUMBER: $(echo "$FINAL_PROMPT" | head -c 40)..."
     
     # Create PR body
     cat > /tmp/pr_body.txt << EOF
-This PR was automatically generated by Claude Code.
+This PR was automatically generated by Claude Code to address issue #$ISSUE_NUMBER.
+
+## Issue addressed:
+Fixes #$ISSUE_NUMBER
 
 ## Prompt executed:
 \`\`\`
@@ -375,7 +495,7 @@ $FINAL_PROMPT
 
 ## Changes made:
 - Automated code changes based on the provided instructions
-- Generated by Claude Code automation system
+- Generated by Claude Code cs-cc automation system
 
 ## Review notes:
 Please review the changes carefully before merging.
@@ -387,23 +507,20 @@ EOF
     # Clean up temp file
     rm -f /tmp/pr_body.txt
     
-elif [ "$ACTION_TYPE" = "pr_comment" ]; then
-    print_status "Updating existing PR #$PR_NUMBER..."
+elif [ "$ACTION_TYPE" = "pr" ]; then
+    print_status "Updating existing PR #$PR_NUMBER with new changes..."
     
-    # Sanitize the prompt for the comment to prevent feedback loops
-    PROMPT_FOR_COMMENT=$(echo "$FINAL_PROMPT" | sed "s/$TRIGGER_PHRASE//g")
-
     # Create comment body
     cat > /tmp/comment_body.txt << EOF
 🤖 Claude Code automation has updated this PR with new changes.
 
 ## Prompt executed:
 \`\`\`
-$PROMPT_FOR_COMMENT
+$FINAL_PROMPT
 \`\`\`
 
 ## Latest changes:
-The code has been automatically updated based on the provided instructions.
+The code has been automatically updated based on the provided instructions using cs-cc automation.
 EOF
     
     gh pr comment "$PR_NUMBER" --body-file /tmp/comment_body.txt
@@ -411,6 +528,10 @@ EOF
     
     # Clean up temp file
     rm -f /tmp/comment_body.txt
+    
+elif [ "$ACTION_TYPE" = "branch" ]; then
+    print_status "Changes pushed to branch $GITHUB_BRANCH"
+    print_status "You can create a PR manually or the changes are ready on the branch"
 fi
 
 print_success "=== Claude Code Automation Completed Successfully ==="
@@ -421,10 +542,15 @@ print_status "Summary:"
 echo "  Repository: $GITHUB_REPO"
 echo "  Branch: $BRANCH_NAME"
 echo "  Action Type: $ACTION_TYPE"
-if [ "$ACTION_TYPE" = "pr_comment" ]; then
+if [ "$ACTION_TYPE" = "pr" ]; then
     echo "  PR Number: $PR_NUMBER"
+elif [ "$ACTION_TYPE" = "issue" ]; then
+    echo "  Issue Number: $ISSUE_NUMBER"
+elif [ "$ACTION_TYPE" = "branch" ]; then
+    echo "  Target Branch: $GITHUB_BRANCH"
 fi
 echo "  Changes: Committed and pushed"
+echo "  MCP Configuration: Applied from cs-cc parameters"
 echo
 print_success "🎉 Workflow completed successfully!"
 

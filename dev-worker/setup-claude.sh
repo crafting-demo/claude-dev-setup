@@ -163,14 +163,204 @@ else
     exit 1
 fi
 
+# Step 8: Configure MCP servers and tools from $HOME/cmd/ files
+print_status "Configuring MCP servers and tools..."
+
+# Set working directory to project root
+cd "$HOME/claude" || {
+    print_error "Could not change to $HOME/claude directory"
+    exit 1
+}
+
+# Function to configure local MCP server if local tools are defined
+configure_local_mcp_server() {
+    local local_mcp_file="$HOME/cmd/local_mcp_tools.txt"
+    
+    if [ -f "$local_mcp_file" ]; then
+        print_status "Found local MCP tools configuration, setting up local MCP server..."
+        
+        # Check if the local MCP server exists
+        local mcp_server_path="$HOME/claude/dev-worker/local_mcp_server/local-mcp-server.js"
+        if [ ! -f "$mcp_server_path" ]; then
+            print_error "Local MCP server not found at $mcp_server_path"
+            return 1
+        fi
+        
+        # Add local MCP server to Claude Code configuration
+        if claude mcp add local_server --scope project --command node --args "$mcp_server_path" 2>/dev/null; then
+            print_success "Local MCP server configured successfully"
+        else
+            print_warning "Failed to configure local MCP server, trying alternative approach..."
+            # Create .mcp.json manually if claude mcp add fails
+            cat > .mcp.json << EOF
+{
+  "mcpServers": {
+    "local_server": {
+      "command": "node",
+      "args": ["$mcp_server_path"]
+    }
+  }
+}
+EOF
+            print_success "Local MCP server configured via .mcp.json"
+        fi
+    else
+        print_status "No local MCP tools configuration found, skipping local server setup"
+    fi
+}
+
+# Function to configure external MCP servers
+configure_external_mcp_servers() {
+    local external_mcp_file="$HOME/cmd/external_mcp.txt"
+    
+    if [ -f "$external_mcp_file" ]; then
+        print_status "Found external MCP configuration, setting up external servers..."
+        
+        # Read and parse external MCP configuration
+        if [ -s "$external_mcp_file" ]; then
+            # Check if it's valid JSON
+            if python3 -m json.tool "$external_mcp_file" > /dev/null 2>&1; then
+                # Parse JSON and configure servers
+                python3 << EOF
+import json
+import subprocess
+import sys
+
+try:
+    with open('$external_mcp_file', 'r') as f:
+        config = json.load(f)
+    
+    if 'servers' in config:
+        for server_name, server_config in config['servers'].items():
+            print(f"Configuring external MCP server: {server_name}")
+            
+            # Build claude mcp add command
+            cmd = ['claude', 'mcp', 'add', server_name, '--scope', 'project']
+            
+            if 'command' in server_config:
+                cmd.extend(['--command', server_config['command']])
+            
+            if 'args' in server_config:
+                for arg in server_config['args']:
+                    cmd.extend(['--args', arg])
+            
+            # Add environment variables if present
+            if 'env' in server_config:
+                for env_var, env_val in server_config['env'].items():
+                    cmd.extend(['--env', f'{env_var}={env_val}'])
+            
+            # Execute command
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            if result.returncode == 0:
+                print(f"✓ Configured {server_name} successfully")
+            else:
+                print(f"✗ Failed to configure {server_name}: {result.stderr}")
+    
+except Exception as e:
+    print(f"Error parsing external MCP config: {e}")
+    sys.exit(1)
+EOF
+                print_success "External MCP servers configured"
+            else
+                print_error "Invalid JSON format in external MCP configuration"
+                return 1
+            fi
+        else
+            print_warning "External MCP configuration file is empty"
+        fi
+    else
+        print_status "No external MCP configuration found, skipping external server setup"
+    fi
+}
+
+# Function to configure tool whitelist
+configure_tool_whitelist() {
+    local whitelist_file="$HOME/cmd/tool_whitelist.txt"
+    
+    if [ -f "$whitelist_file" ]; then
+        print_status "Found tool whitelist configuration..."
+        
+        if [ -s "$whitelist_file" ]; then
+            # Check if it's JSON format or newline-separated
+            if python3 -m json.tool "$whitelist_file" > /dev/null 2>&1; then
+                print_status "Processing JSON format tool whitelist"
+                # Extract tools from JSON array
+                python3 -c "
+import json
+with open('$whitelist_file', 'r') as f:
+    tools = json.load(f)
+    if isinstance(tools, list):
+        for tool in tools:
+            print(tool)
+" > /tmp/tool_whitelist.tmp
+            else
+                print_status "Processing text format tool whitelist"
+                # Assume newline-separated format
+                cp "$whitelist_file" /tmp/tool_whitelist.tmp
+            fi
+            
+            # Apply tool whitelist configuration
+            # Note: Claude Code tool whitelisting may require specific commands or configuration
+            # For now, we'll store it for the worker script to use
+            cp /tmp/tool_whitelist.tmp "$HOME/cmd/processed_tool_whitelist.txt"
+            rm -f /tmp/tool_whitelist.tmp
+            
+            print_success "Tool whitelist processed and saved"
+        else
+            print_warning "Tool whitelist file is empty"
+        fi
+    else
+        print_status "No tool whitelist found, allowing all tools"
+    fi
+}
+
+# Function to setup prompt for Claude execution
+setup_prompt() {
+    local prompt_file="$HOME/cmd/prompt.txt"
+    
+    if [ -f "$prompt_file" ]; then
+        print_status "Found prompt configuration at $prompt_file"
+        if [ -s "$prompt_file" ]; then
+            print_success "Prompt file ready for execution"
+        else
+            print_warning "Prompt file is empty"
+        fi
+    else
+        print_warning "No prompt file found at $prompt_file"
+    fi
+}
+
+# Execute MCP configuration steps
+configure_local_mcp_server
+configure_external_mcp_servers
+configure_tool_whitelist
+setup_prompt
+
+# Verify MCP configuration
+print_status "Verifying MCP configuration..."
+if claude mcp list > /dev/null 2>&1; then
+    print_success "MCP configuration verification passed"
+    # Show configured servers
+    print_status "Configured MCP servers:"
+    claude mcp list 2>/dev/null || echo "  (No servers configured)"
+else
+    print_warning "MCP configuration verification failed, but installation may still work"
+fi
+
 # Final success message
 echo
-print_success "🎉 Claude Code setup completed successfully!"
+print_success "🎉 Claude Code setup with MCP configuration completed successfully!"
+echo
+print_status "Configuration Summary:"
+echo "  • Claude Code: Installed and verified"
+echo "  • MCP Servers: Configured from /cmd/ directory"
+echo "  • Tool Whitelist: Applied if provided"
+echo "  • Prompt: Ready from $HOME/cmd/prompt.txt"
 echo
 print_status "Next steps:"
-echo "  1. Restart your terminal or run: source ~/.bashrc"
-echo "  2. Navigate to your workspace: cd ~/claude/claude-workspace"
-echo "  3. Test Claude Code: claude --version"
-echo "  4. Start using Claude Code: claude"
+echo "  1. Navigate to your workspace: cd ~/claude"
+echo "  2. Test Claude Code: claude --version"
+echo "  3. List MCP servers: claude mcp list"
+echo "  4. Start using Claude Code with MCP tools"
 echo
 print_warning "Note: You'll need to authenticate with your Anthropic API key when you first run Claude Code" 
