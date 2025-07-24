@@ -73,6 +73,24 @@ fi
 print_status "Prompt loaded successfully (${#CLAUDE_PROMPT} characters)"
 print_status "Prompt preview: $(echo "$CLAUDE_PROMPT" | head -c 100)..."
 
+# Load environment variables from cs-cc parameter files if not already set
+if [ -z "$GITHUB_REPO" ] && [ -f "$HOME/cmd/github_repo.txt" ]; then
+    export GITHUB_REPO=$(cat "$HOME/cmd/github_repo.txt" 2>/dev/null || echo "")
+fi
+
+if [ -z "$GITHUB_TOKEN" ] && [ -f "$HOME/cmd/github_token.txt" ]; then
+    export GITHUB_TOKEN=$(cat "$HOME/cmd/github_token.txt" 2>/dev/null || echo "")
+fi
+
+if [ -z "$GITHUB_BRANCH" ] && [ -f "$HOME/cmd/github_branch.txt" ]; then
+    export GITHUB_BRANCH=$(cat "$HOME/cmd/github_branch.txt" 2>/dev/null || echo "main")
+fi
+
+# Set default ACTION_TYPE for multi-agent workflows  
+if [ -z "$ACTION_TYPE" ]; then
+    export ACTION_TYPE="create_pr"
+fi
+
 # Debug: Print environment variables (safely)
 print_status "Environment variables from cs-cc CLI:"
 echo "GITHUB_REPO: $GITHUB_REPO"
