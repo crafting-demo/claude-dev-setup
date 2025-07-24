@@ -4,3 +4,4 @@ hooks:
       export CLI_SCRIPT=y
       mkdir -p "$HOME/claude"
       mkdir -p "$HOME/claude/claude-workspace"
+      mkdir -p "$HOME/cmd"

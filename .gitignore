@@ -19,3 +19,6 @@ gh-watcher/dev_prompt.txt
 
 # Package lock files (npm, yarn, pnpm, bun)
 **/package-lock.json
+
+# Test directories
+/tests/

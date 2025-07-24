@@ -88,7 +88,12 @@ function parseArguments() {
           throw new Error(`Unknown option: ${arg}`);
       }
     } else if (arg.startsWith('-')) {
-      throw new Error(`Option ${arg} requires a value`);
+      // Special case for dry-run flag that doesn't need a value
+      if (arg === '--dry-run') {
+        parsed.dryRun = true;
+      } else {
+        throw new Error(`Option ${arg} requires a value`);
+      }
     } else {
       throw new Error(`Unexpected positional argument: ${arg}`);
     }
@@ -116,6 +121,7 @@ Options:
   -t, --tools <value>            Tool whitelist string or file path (optional)
   -d, --delete-when-done <yes|no> Delete sandbox when done (default: yes)
   -n, --name <name>              Sandbox name (default: auto-generated)
+  --dry-run                      Validate parameters and show commands without execution
   --help                         Show this help message
 
 Examples:
@@ -142,6 +148,17 @@ function readFileOrString(value) {
   return value;
 }
 
+function validateJsonContent(content, parameterName) {
+  if (!content) return content;
+  
+  try {
+    JSON.parse(content);
+    return content;
+  } catch (error) {
+    throw new Error(`Invalid JSON in ${parameterName}: ${error.message}`);
+  }
+}
+
 
 
 function validateArgs(args) {
@@ -160,8 +177,16 @@ function validateArgs(args) {
   
   // Validate GitHub integration parameters
   if (args.r || args.ght || githubParams.length > 0) {
-    if (!args.r) errors.push('GitHub repo (-r) is required when using GitHub integration');
-    if (!args.ght) errors.push('GitHub token (-ght) is required when using GitHub integration');
+    if (!args.r) {
+      errors.push('GitHub repo is required when using GitHub integration');
+    } else {
+      // Validate GitHub repository format (owner/repo)
+      const repoPattern = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
+      if (!repoPattern.test(args.r)) {
+        errors.push('Invalid repo format - must be in format owner/repo');
+      }
+    }
+    if (!args.ght) errors.push('GitHub token is required when using GitHub integration');
     if (githubParams.length === 0) {
       errors.push('One of -pr, -i, or -b must be specified when using GitHub integration');
     }
@@ -182,60 +207,73 @@ function generateSandboxName(args) {
     return args.n;
   }
   
-  // Use existing naming logic from agent.js
+  // Use existing naming logic from agent.js with sanitization
   const repoName = args.r ? args.r.split('/')[1] || 'repo' : 'sandbox';
   const timestamp = Date.now().toString().slice(-4);
   const itemNumber = args.pr || args.i || 'dev';
-  const sandboxName = `cw-${repoName.substring(0,8)}-${itemNumber}-${timestamp}`.substring(0, 20);
+  
+  // Sanitize repo name - replace invalid characters with hyphens and ensure valid format
+  const sanitizedRepoName = repoName
+    .substring(0, 8)
+    .replace(/[^a-z0-9-]/gi, '-')  // Replace invalid chars with hyphens
+    .replace(/^[^a-z]/i, 'a')      // Ensure starts with letter
+    .replace(/[^a-z0-9]$/i, '9')   // Ensure ends with letter or number
+    .toLowerCase();
+  
+  const sandboxName = `cw-${sanitizedRepoName}-${itemNumber}-${timestamp}`.substring(0, 20);
   
   return sandboxName;
 }
 
 async function transferFile(content, sandboxName, targetPath, description) {
   if (!content) return;
-  
+
   const tempFile = `./temp_${Date.now()}.txt`;
-  
+
   try {
     // Write content to temporary file
     writeFileSync(tempFile, content, 'utf8');
-    
-    // Create target directory in sandbox first
-    const targetDir = targetPath.substring(0, targetPath.lastIndexOf('/'));
-    const mkdirCmd = `cs exec -t -u 1000 -W ${sandboxName}/claude -- mkdir -p ${targetDir}`;
-    console.log(`Creating directory in sandbox: ${targetDir}`);
-    
+
+    // -----------------------------------------------------------------------------------
+    // Ensure destination directory exists inside the sandbox before attempting SCP
+    // -----------------------------------------------------------------------------------
+    const remoteDir = dirname(targetPath);
+    const mkdirCmd = `cs exec -t -u 1000 -W ${sandboxName}/claude -- mkdir -p ${remoteDir}`;
+    console.log(`Ensuring remote directory exists: ${remoteDir}`);
+
     await new Promise((resolve, reject) => {
-      const child = exec(mkdirCmd, { timeout: 10000 });
-      
+      const child = exec(mkdirCmd, { timeout: 20000 });
+
       child.on('close', (code) => {
         if (code === 0) {
-          resolve({ code });
+          resolve();
         } else {
-          reject(new Error(`Directory creation failed with exit code: ${code}`));
+          console.warn(`Directory creation command exited with code ${code} (dir may already exist)`);
+          resolve(); // Proceed anyway; scp may still work if dir exists
         }
       });
-      
+
       child.on('error', (error) => {
-        reject(error);
+        console.warn(`Failed to create remote directory: ${error.message} (continuing anyway)`);
+        resolve();
       });
     });
-    
+
     // Transfer file to sandbox
-    const scpCmd = `cs scp ${tempFile} ${sandboxName}:${targetPath}`;
-    console.log(`Transferring ${description} to sandbox: ${targetPath}`);
-    
+    const scpCmd = `cs scp ${tempFile} ${sandboxName}/claude:${targetPath}`;
+    console.log(`Transferring ${description} to sandbox path: ${targetPath}`);
+
     await new Promise((resolve, reject) => {
       const child = exec(scpCmd, { timeout: 30000 });
-      
+
       child.stdout.on('data', (data) => {
         process.stdout.write(`[SCP] ${data}`);
       });
-      
+
       child.stderr.on('data', (data) => {
         process.stderr.write(`[SCP] ${data}`);
       });
-      
+
       child.on('close', (code) => {
         if (code === 0) {
           console.log(`${description} transfer completed successfully`);
@@ -245,13 +283,13 @@ async function transferFile(content, sandboxName, targetPath, description) {
           reject(new Error(`${description} transfer failed with exit code: ${code}`));
         }
       });
-      
+
       child.on('error', (error) => {
         console.error(`${description} transfer failed: ${error.message}`);
         reject(error);
       });
     });
-    
+
   } finally {
     // Clean up temporary file
     try {
@@ -262,16 +300,90 @@ async function transferFile(content, sandboxName, targetPath, description) {
   }
 }
 
+async function validateGitHubResources(args) {
+  // Only validate if GitHub integration is being used
+  if (!args.r || !args.ght) return;
+  
+  const repo = args.r;
+  
+  try {
+    if (args.pr) {
+      // Validate PR exists using gh CLI
+      const result = await new Promise((resolve) => {
+        const child = exec(`gh pr view ${args.pr} --repo ${repo}`, 
+          { timeout: 10000, env: { ...process.env, GITHUB_TOKEN: args.ght } });
+        
+        child.on('close', (code) => {
+          resolve({ code });
+        });
+        
+        child.on('error', (error) => {
+          resolve({ code: 1 });
+        });
+      });
+      
+      if (result.code !== 0) {
+        throw new Error(`Pull request #${args.pr} does not exist in ${repo}`);
+      }
+    } else if (args.i) {
+      // Validate issue exists using gh CLI
+      const result = await new Promise((resolve) => {
+        const child = exec(`GITHUB_TOKEN=${args.ght} gh issue view ${args.i} --repo ${repo} --json number`, 
+          { timeout: 10000 });
+        
+        child.on('close', (code) => {
+          resolve({ code });
+        });
+        
+        child.on('error', () => {
+          resolve({ code: 1 });
+        });
+      });
+      
+      if (result.code !== 0) {
+        throw new Error(`Issue #${args.i} does not exist in ${repo}`);
+      }
+    } else if (args.b) {
+      // Validate branch exists using gh CLI
+      const result = await new Promise((resolve) => {
+        const child = exec(`GITHUB_TOKEN=${args.ght} gh api repos/${repo}/branches/${args.b} --jq .name`, 
+          { timeout: 10000 });
+        
+        child.on('close', (code) => {
+          resolve({ code });
+        });
+        
+        child.on('error', () => {
+          resolve({ code: 1 });
+        });
+      });
+      
+      if (result.code !== 0) {
+        throw new Error(`Branch '${args.b}' does not exist in ${repo}`);
+      }
+    }
+  } catch (error) {
+    if (error.message.includes('does not exist')) {
+      throw error;
+    }
+    // For network errors or other issues, log warning but don't fail
+    console.warn(`Warning: Could not validate GitHub resource: ${error.message}`);
+  }
+}
+
 async function createSandbox(args) {
   try {
     // Validate arguments
     validateArgs(args);
     
+    // Validate GitHub resources exist
+    await validateGitHubResources(args);
+    
     // Read file content for parameters that support files
     const prompt = readFileOrString(args.p);
-    const mcpConfig = readFileOrString(args.mc);
-    const localMcpConfig = readFileOrString(args.lmc);
-    const toolWhitelist = readFileOrString(args.t);
+    const mcpConfig = args.mc ? validateJsonContent(readFileOrString(args.mc), 'external MCP config (-mc)') : '';
+    const localMcpConfig = args.lmc ? validateJsonContent(readFileOrString(args.lmc), 'local MCP config (-lmc)') : '';
+    const toolWhitelist = args.t ? validateJsonContent(readFileOrString(args.t), 'tool whitelist (-t)') : '';
     
     // Generate sandbox name
     const sandboxName = generateSandboxName(args);
@@ -318,6 +430,22 @@ async function createSandbox(args) {
     
     console.log(`Executing sandbox creation command...`);
     console.log(`Command: ${cmd}`);
+    
+    // Check for dry-run mode
+    if (args.dryRun) {
+      console.log(`\n🔍 DRY RUN MODE - No actual sandbox creation or file transfers will occur\n`);
+      
+      // Show what files would be transferred
+      console.log(`Files that would be transferred:`);
+      console.log(`  📄 Prompt → /home/owner/cmd/prompt.txt`);
+      if (mcpConfig) console.log(`  📄 External MCP config → /home/owner/cmd/external_mcp.txt`);
+      if (localMcpConfig) console.log(`  📄 Local MCP tools → /home/owner/cmd/local_mcp_tools.txt`);
+      if (toolWhitelist) console.log(`  📄 Tool whitelist → /home/owner/cmd/tool_whitelist.txt`);
+      
+      console.log(`\n✅ Parameter validation successful. Command would execute: ${cmd}`);
+      console.log(`\n🚀 Dry run complete. Remove --dry-run flag to create actual sandbox.`);
+      return;
+    }
     
     // Execute sandbox creation
     await new Promise((resolve, reject) => {

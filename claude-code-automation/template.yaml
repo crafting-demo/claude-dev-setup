@@ -4,6 +4,7 @@ workspaces:
       - path: claude
         repo:
           git: git@github.com:crafting-demo/claude-dev-setup.git
+        version_spec: multi-agent
         manifest:
           overlays:
             - file: dev-worker/.sandbox/manifest.yaml
