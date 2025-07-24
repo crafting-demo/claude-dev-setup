@@ -186,6 +186,17 @@ configure_local_mcp_server() {
             return 1
         fi
         
+        # Ensure the MCP server path is owned by the current user
+        sudo chown -R "$USER:$USER" "$HOME/claude/dev-worker/local_mcp_server" 2>/dev/null || true
+        
+        # Change to the claude workspace directory where .mcp.json should be created
+        cd "$HOME/claude" || {
+            print_error "Could not change to claude workspace directory"
+            return 1
+        }
+        
+        print_status "Configuring MCP server in directory: $(pwd)"
+        
         # Add local MCP server to Claude Code configuration
         if claude mcp add local_server --scope project --command node --args "$mcp_server_path" 2>/dev/null; then
             print_success "Local MCP server configured successfully"
@@ -202,7 +213,17 @@ configure_local_mcp_server() {
   }
 }
 EOF
+            # Ensure the config file is owned by the current user
+            chown "$USER:$USER" .mcp.json 2>/dev/null || true
             print_success "Local MCP server configured via .mcp.json"
+        fi
+        
+        # Verify the configuration was created
+        if [ -f ".mcp.json" ]; then
+            print_status "MCP configuration file created successfully:"
+            cat .mcp.json
+        else
+            print_warning "No .mcp.json file found after configuration attempt"
         fi
     else
         print_status "No local MCP tools configuration found, skipping local server setup"

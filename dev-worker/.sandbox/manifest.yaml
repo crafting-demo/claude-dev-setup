@@ -5,3 +5,32 @@ hooks:
       mkdir -p "$HOME/claude"
       mkdir -p "$HOME/claude/claude-workspace"
       mkdir -p "$HOME/cmd"
+      
+      # Install MCP dependencies with better error handling
+      echo "Installing MCP dependencies..."
+      if [ -d "$HOME/claude/dev-worker/local_mcp_server" ]; then
+        cd "$HOME/claude/dev-worker/local_mcp_server"
+        if [ -f "package.json" ]; then
+          echo "Found package.json, installing dependencies..."
+          # Use full path to npm and ensure it's available
+          export PATH="/usr/local/go/bin:/usr/local/node/bin:$PATH"
+          /usr/local/node/bin/npm install --silent --no-progress || {
+            echo "Warning: Failed to install MCP dependencies"
+            echo "npm location: $(which npm || echo 'npm not found')"
+            echo "PATH: $PATH"
+            ls -la
+            cat package.json
+          }
+          echo "npm install completed, checking node_modules..."
+          ls -la node_modules/ || echo "node_modules directory not created"
+        else
+          echo "Warning: package.json not found in MCP server directory"
+        fi
+      else
+        echo "Warning: MCP server directory not found"
+      fi
+      
+      # Ensure owner user owns all files
+      sudo chown -R owner:owner "$HOME/claude" || true
+      
+      echo "Post-checkout hook completed"

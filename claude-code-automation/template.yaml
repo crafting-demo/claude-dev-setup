@@ -10,4 +10,4 @@ workspaces:
             - file: dev-worker/.sandbox/manifest.yaml
     env:
       - SHELL=/bin/bash
-      - PATH=/usr/local/go/bin:/usr/local/node/bin:$PATH      
+      - PATH=/usr/local/go/bin:/usr/local/node/bin:$PATH

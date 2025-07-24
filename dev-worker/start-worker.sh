@@ -196,12 +196,26 @@ start_local_mcp_server() {
     local local_mcp_config="$HOME/cmd/local_mcp_tools.txt"
     local mcp_server_script="$HOME/claude/dev-worker/local_mcp_server/local-mcp-server.js"
     
+    print_status "MCP Server startup - User: $(whoami), HOME: $HOME"
+    
     if [ -f "$local_mcp_config" ] && [ -s "$local_mcp_config" ]; then
         print_status "Local MCP tools configuration found, starting local MCP server..."
+        print_status "Config file: $local_mcp_config"
+        print_status "Server script: $mcp_server_script"
         
         if [ ! -f "$mcp_server_script" ]; then
             print_error "Local MCP server script not found at $mcp_server_script"
             return 1
+        fi
+        
+        # Ensure we're running as the owner user
+        if [ "$(whoami)" != "owner" ]; then
+            print_warning "Script not running as owner user, current user: $(whoami)"
+            # Try to switch to owner user for MCP operations
+            export HOME="/home/owner"
+            local_mcp_config="/home/owner/cmd/local_mcp_tools.txt"
+            mcp_server_script="/home/owner/claude/dev-worker/local_mcp_server/local-mcp-server.js"
+            print_status "Adjusted paths - Config: $local_mcp_config, Script: $mcp_server_script"
         fi
         
         # Check if server is already running
@@ -211,10 +225,27 @@ start_local_mcp_server() {
             sleep 2
         fi
         
+        # Ensure MCP server directory and dependencies are ready
+        local mcp_server_dir="$(dirname "$mcp_server_script")"
+        if [ ! -d "$mcp_server_dir/node_modules" ]; then
+            print_status "Installing MCP server dependencies..."
+            cd "$mcp_server_dir"
+            npm install --silent || {
+                print_error "Failed to install MCP server dependencies"
+                return 1
+            }
+        fi
+        
         # Start the MCP server in background
         print_status "Starting local MCP server at $mcp_server_script"
-        cd "$HOME/claude/dev-worker/local_mcp_server"
-        nohup node local-mcp-server.js > mcp-server.log 2>&1 &
+        cd "$mcp_server_dir"
+        
+        # Run as owner user if we're not already
+        if [ "$(whoami)" = "owner" ]; then
+            nohup node local-mcp-server.js > mcp-server.log 2>&1 &
+        else
+            nohup sudo -u owner node local-mcp-server.js > mcp-server.log 2>&1 &
+        fi
         MCP_SERVER_PID=$!
         
         # Give the server a moment to start
@@ -232,6 +263,10 @@ start_local_mcp_server() {
         fi
     else
         print_status "No local MCP tools configuration found, skipping local MCP server startup"
+        print_status "Checked for: $local_mcp_config"
+        if [ -f "$local_mcp_config" ]; then
+            print_status "File exists but is empty ($(wc -c < "$local_mcp_config") bytes)"
+        fi
     fi
 }
 

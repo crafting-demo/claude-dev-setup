@@ -84,6 +84,10 @@ function parseArguments() {
           parsed.n = value;
           i++;
           break;
+        case '--debug':
+          parsed.debug = value;
+          i++;
+          break;
         default:
           throw new Error(`Unknown option: ${arg}`);
       }
@@ -121,6 +125,7 @@ Options:
   -t, --tools <value>            Tool whitelist string or file path (optional)
   -d, --delete-when-done <yes|no> Delete sandbox when done (default: yes)
   -n, --name <name>              Sandbox name (default: auto-generated)
+  --debug <yes|no>               Debug mode: wait for worker completion and show all output (default: no)
   --dry-run                      Validate parameters and show commands without execution
   --help                         Show this help message
 
@@ -128,6 +133,7 @@ Examples:
   cs-cc -p "Fix the login bug" -r "owner/repo" -ght "ghp_token" -pr 123
   cs-cc -p prompt.txt -r "owner/repo" -ght "ghp_token" -i 456 -mc external_mcp.txt
   cs-cc -p "Implement feature" -pool my-pool -lmc local_tools.txt -t tool_whitelist.txt
+  cs-cc -p "Debug workflow" -r "owner/repo" -ght "token" -b main --debug yes
 `);
 }
 
@@ -195,6 +201,11 @@ function validateArgs(args) {
   // Validate delete-when-done parameter
   if (args.d && !['yes', 'no'].includes(args.d.toLowerCase())) {
     errors.push('Delete when done (-d) must be "yes" or "no"');
+  }
+  
+  // Validate debug parameter
+  if (args.debug && !['yes', 'no'].includes(args.debug.toLowerCase())) {
+    errors.push('Debug mode (--debug) must be "yes" or "no"');
   }
   
   if (errors.length > 0) {
@@ -421,6 +432,10 @@ async function createSandbox(args) {
     const shouldDelete = args.d.toLowerCase() === 'yes' ? 'true' : 'false';
     envVars.push(`-D 'claude/env[SHOULD_DELETE]=${shouldDelete}'`);
     
+    // Debug mode variable
+    const debugMode = args.debug && args.debug.toLowerCase() === 'yes' ? 'true' : 'false';
+    envVars.push(`-D 'claude/env[DEBUG_MODE]=${debugMode}'`);
+    
     // Add Anthropic API key
     envVars.push(`-D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`);
     
@@ -493,9 +508,63 @@ async function createSandbox(args) {
     }
     
     console.log(`\n🚀 Sandbox "${sandboxName}" created successfully with all configurations!`);
-    console.log(`\nNext steps:`);
-    console.log(`  1. Connect to sandbox: cs ssh ${sandboxName}`);
-    console.log(`  2. Initialize worker: ~/dev-worker/start-worker.sh`);
+    
+    // If debug mode is enabled, execute the worker and wait for completion
+    if (args.debug && args.debug.toLowerCase() === 'yes') {
+      console.log(`\n🔧 DEBUG MODE: Starting worker execution and waiting for completion...`);
+      
+      const workerCmd = `cs exec -t -u 1000 -W ${sandboxName}/claude -- bash -i -c '~/claude/dev-worker/start-worker.sh'`;
+      console.log(`Executing worker: ${workerCmd}`);
+      console.log(`\n📡 REAL-TIME WORKER OUTPUT:\n${'='.repeat(80)}`);
+      
+      await new Promise((resolve, reject) => {
+        const child = exec(workerCmd, { timeout: 600000 }); // 10 minute timeout
+        
+        // Stream stdout in real-time with timestamps
+        child.stdout.on('data', (data) => {
+          const timestamp = new Date().toISOString().substring(11, 19);
+          const lines = data.toString().split('\n');
+          lines.forEach(line => {
+            if (line.trim()) {
+              console.log(`[${timestamp}] ${line}`);
+            }
+          });
+        });
+        
+        // Stream stderr in real-time
+        child.stderr.on('data', (data) => {
+          const timestamp = new Date().toISOString().substring(11, 19);
+          const lines = data.toString().split('\n');
+          lines.forEach(line => {
+            if (line.trim()) {
+              console.error(`[${timestamp}] ERROR: ${line}`);
+            }
+          });
+        });
+        
+        child.on('close', (code) => {
+          console.log(`\n${'='.repeat(80)}`);
+          if (code === 0) {
+            console.log(`✅ Worker execution completed successfully`);
+            resolve({ code });
+          } else {
+            console.error(`❌ Worker execution failed with exit code: ${code}`);
+            reject(new Error(`Worker execution failed with exit code: ${code}`));
+          }
+        });
+        
+        child.on('error', (error) => {
+          console.log(`\n${'='.repeat(80)}`);
+          console.error(`❌ Worker execution failed: ${error.message}`);
+          reject(error);
+        });
+      });
+      
+    } else {
+      console.log(`\nNext steps:`);
+      console.log(`  1. Connect to sandbox: cs ssh ${sandboxName}`);
+      console.log(`  2. Initialize worker: ~/dev-worker/start-worker.sh`);
+    }
     
   } catch (error) {
     console.error(`❌ cs-cc failed: ${error.message}`);
