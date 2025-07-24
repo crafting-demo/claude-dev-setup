@@ -37,6 +37,23 @@ command_exists() {
 
 print_status "=== Claude Code Automation Workflow ==="
 
+# Step 1: Setup Claude Code and MCP configuration
+print_status "Setting up Claude Code environment..."
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+if [ -f "$SCRIPT_DIR/setup-claude.sh" ]; then
+    print_status "Sourcing setup-claude.sh to configure Claude Code and MCP..."
+    source "$SCRIPT_DIR/setup-claude.sh"
+    print_success "Claude Code and MCP setup completed"
+    
+    # Ensure PATH includes Claude Code after installation
+    export PATH="$HOME/.npm-global/bin:$PATH"
+    print_status "PATH confirmed: $PATH"
+else
+    print_error "setup-claude.sh not found in $SCRIPT_DIR"
+    exit 1
+fi
+
 # Read prompt from cmd directory (cs-cc parameter system)
 PROMPT_FILE="$HOME/cmd/prompt.txt"
 print_status "Reading prompt from cs-cc parameter file: $PROMPT_FILE"
@@ -181,8 +198,8 @@ if ! command_exists git; then
 fi
 
 if ! command_exists claude; then
-    print_error "Claude Code is not installed or not in PATH"
-    echo "Please run setup-claude.sh first to install Claude Code"
+    print_error "Claude Code is not installed or not in PATH after setup"
+    print_error "Setup may have failed - check setup-claude.sh output above"
     exit 1
 fi
 
