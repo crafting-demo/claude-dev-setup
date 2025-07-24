@@ -198,7 +198,7 @@ configure_local_mcp_server() {
         print_status "Configuring MCP server in directory: $(pwd)"
         
         # Add local MCP server to Claude Code configuration
-        if claude mcp add local_server --scope project --command node --args "$mcp_server_path" 2>/dev/null; then
+        if claude mcp add local_server node "$mcp_server_path" --scope project 2>/dev/null; then
             print_success "Local MCP server configured successfully"
         else
             print_warning "Failed to configure local MCP server, trying alternative approach..."
@@ -207,8 +207,10 @@ configure_local_mcp_server() {
 {
   "mcpServers": {
     "local_server": {
+      "type": "stdio",
       "command": "node",
-      "args": ["$mcp_server_path"]
+      "args": ["$mcp_server_path"],
+      "env": {}
     }
   }
 }
