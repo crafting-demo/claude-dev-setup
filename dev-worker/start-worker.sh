@@ -229,6 +229,10 @@ print_status "Starting MCP server lifecycle management..."
 
 # Function to start local MCP server
 start_local_mcp_server() {
+    # Prevent the entire worker from aborting if MCP server startup fails
+    # This function is best-effort: Claude Code can still work without a long-running
+    # background server because it will spawn the server on demand via `claude mcp`.
+    set +e  # Temporarily disable exit-on-error within this function
     local local_mcp_config="$HOME/cmd/local_mcp_tools.txt"
     local mcp_server_script="$HOME/claude/dev-worker/local_mcp_server/local-mcp-server.js"
     
@@ -240,8 +244,9 @@ start_local_mcp_server() {
         print_status "Server script: $mcp_server_script"
         
         if [ ! -f "$mcp_server_script" ]; then
-            print_error "Local MCP server script not found at $mcp_server_script"
-            return 1
+            print_warning "Local MCP server script not found at $mcp_server_script (continuing)"
+            set -e
+            return 0
         fi
         
         # Ensure we're running as the owner user
@@ -267,8 +272,9 @@ start_local_mcp_server() {
             print_status "Installing MCP server dependencies..."
             cd "$mcp_server_dir"
             npm install --silent || {
-                print_error "Failed to install MCP server dependencies"
-                return 1
+                print_warning "Failed to install MCP server dependencies (continuing without local server)"
+                set -e
+                return 0
             }
         fi
         
@@ -292,10 +298,9 @@ start_local_mcp_server() {
             print_success "Local MCP server started successfully (PID: $MCP_SERVER_PID)"
             echo $MCP_SERVER_PID > "$HOME/cmd/mcp_server.pid"
         else
-            print_error "Failed to start local MCP server"
-            print_status "Server logs:"
+            print_warning "Local MCP server did not remain running (non-fatal)."
+            print_status "Recent server logs:"
             tail -10 mcp-server.log 2>/dev/null || echo "No logs available"
-            return 1
         fi
     else
         print_status "No local MCP tools configuration found, skipping local MCP server startup"
@@ -304,6 +309,10 @@ start_local_mcp_server() {
             print_status "File exists but is empty ($(wc -c < "$local_mcp_config") bytes)"
         fi
     fi
+
+    # Re-enable exit-on-error for the rest of the script and always succeed
+    set -e
+    return 0
 }
 
 # Function to setup cleanup trap for MCP server

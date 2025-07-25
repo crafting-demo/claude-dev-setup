@@ -242,72 +242,42 @@ async function transferFile(content, sandboxName, targetPath, description) {
   const tempFile = `./temp_${Date.now()}.txt`;
 
   try {
-    // Write content to temporary file
     writeFileSync(tempFile, content, 'utf8');
 
-    // -----------------------------------------------------------------------------------
-    // Ensure destination directory exists inside the sandbox before attempting SCP
-    // -----------------------------------------------------------------------------------
     const remoteDir = dirname(targetPath);
-    const mkdirCmd = `cs exec -t -u 1000 -W ${sandboxName}/claude -- mkdir -p ${remoteDir}`;
+    const mkdirCmdBase = `cs exec -t -u 1000 -W ${sandboxName}/claude -- mkdir -p ${remoteDir}`;
+    const scpCmdBase   = `cs scp ${tempFile} ${sandboxName}/claude:${targetPath}`;
+
+    // Helper to run a shell command with retries
+    const runWithRetries = (cmd, maxRetries = 5, delayMs = 5000) => new Promise((resolve, reject) => {
+      let attempt = 0;
+      const run = () => {
+        console.log(`Attempt #${attempt+1}: ${cmd}`);
+        const child = exec(cmd, { timeout: 60000 });
+        child.on('close', (code) => {
+          if (code === 0) return resolve();
+          if (++attempt >= maxRetries) return reject(new Error(`Command failed after ${maxRetries} attempts (exit ${code})`));
+          console.warn(`Command failed (exit ${code}) – retrying in ${delayMs/1000}s...`);
+          setTimeout(run, delayMs);
+        });
+        child.on('error', (err) => {
+          if (++attempt >= maxRetries) return reject(err);
+          console.warn(`Command error: ${err.message} – retrying in ${delayMs/1000}s...`);
+          setTimeout(run, delayMs);
+        });
+      };
+      run();
+    });
+
     console.log(`Ensuring remote directory exists: ${remoteDir}`);
+    await runWithRetries(mkdirCmdBase);
 
-    await new Promise((resolve, reject) => {
-      const child = exec(mkdirCmd, { timeout: 20000 });
-
-      child.on('close', (code) => {
-        if (code === 0) {
-          resolve();
-        } else {
-          console.warn(`Directory creation command exited with code ${code} (dir may already exist)`);
-          resolve(); // Proceed anyway; scp may still work if dir exists
-        }
-      });
-
-      child.on('error', (error) => {
-        console.warn(`Failed to create remote directory: ${error.message} (continuing anyway)`);
-        resolve();
-      });
-    });
-
-    // Transfer file to sandbox
-    const scpCmd = `cs scp ${tempFile} ${sandboxName}/claude:${targetPath}`;
     console.log(`Transferring ${description} to sandbox path: ${targetPath}`);
+    await runWithRetries(scpCmdBase);
 
-    await new Promise((resolve, reject) => {
-      const child = exec(scpCmd, { timeout: 30000 });
-
-      child.stdout.on('data', (data) => {
-        process.stdout.write(`[SCP] ${data}`);
-      });
-
-      child.stderr.on('data', (data) => {
-        process.stderr.write(`[SCP] ${data}`);
-      });
-
-      child.on('close', (code) => {
-        if (code === 0) {
-          console.log(`${description} transfer completed successfully`);
-          resolve({ code });
-        } else {
-          console.error(`${description} transfer failed with exit code: ${code}`);
-          reject(new Error(`${description} transfer failed with exit code: ${code}`));
-        }
-      });
-
-      child.on('error', (error) => {
-        console.error(`${description} transfer failed: ${error.message}`);
-        reject(error);
-      });
-    });
-
+    console.log(`${description} transfer completed successfully`);
   } finally {
-    // Clean up temporary file
-    try {
-      unlinkSync(tempFile);
-    } catch (err) {
-      console.warn(`Failed to clean up temporary file: ${err.message}`);
-    }
+    try { unlinkSync(tempFile); } catch {}
   }
 }
 
