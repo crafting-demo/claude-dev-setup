@@ -508,12 +508,12 @@ async function createSandbox(args) {
     if (args.debug && args.debug.toLowerCase() === 'yes') {
       console.log(`\n🔧 DEBUG MODE: Starting worker execution and waiting for completion...`);
       
-      const workerCmd = `cs exec -t -u 1000 -W ${sandboxName}/claude -- bash -i -c '~/claude/dev-worker/start-worker.sh'`;
+      const workerCmd = `cs exec -i -t -u 1000 -W ${sandboxName}/claude -- bash -i -c '~/claude/dev-worker/start-worker.sh'`;
       console.log(`Executing worker: ${workerCmd}`);
       console.log(`\n📡 REAL-TIME WORKER OUTPUT:\n${'='.repeat(80)}`);
       
       await new Promise((resolve, reject) => {
-        const child = exec(workerCmd, { timeout: 600000 }); // 10 minute timeout
+        const child = exec(workerCmd, { timeout: 1800000 }); // 30 minute timeout
         
         // Stream stdout in real-time with timestamps
         child.stdout.on('data', (data) => {
