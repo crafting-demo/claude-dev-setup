@@ -54,6 +54,26 @@ else
     exit 1
 fi
 
+# -----------------------------------------------------------------------------------
+# Ensure the dev-worker code is up-to-date with the latest commit from the repository
+# -----------------------------------------------------------------------------------
+print_status "Checking for newer commits in dev-worker repository..."
+set +e  # Don't abort workflow if update fails
+cd /home/owner/claude || true
+# Mark repo as safe for Git >=2.35+ ownership checks
+git config --global --add safe.directory /home/owner/claude 2>/dev/null || true
+CURRENT_COMMIT=$(git rev-parse --verify HEAD 2>/dev/null)
+git fetch --quiet origin || true
+git pull --quiet --rebase --autostash origin "$(git rev-parse --abbrev-ref HEAD)" || true
+UPDATED_COMMIT=$(git rev-parse --verify HEAD 2>/dev/null)
+if [ "$CURRENT_COMMIT" != "$UPDATED_COMMIT" ]; then
+    print_success "Dev-worker repository updated: $CURRENT_COMMIT → $UPDATED_COMMIT"
+else
+    print_status "Dev-worker repository already up-to-date ($CURRENT_COMMIT)"
+fi
+cd "$SCRIPT_DIR" || true
+set -e
+
 # Read prompt from cmd directory (cs-cc parameter system)
 PROMPT_FILE="$HOME/cmd/prompt.txt"
 print_status "Reading prompt from cs-cc parameter file: $PROMPT_FILE"
