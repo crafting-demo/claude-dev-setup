@@ -506,7 +506,32 @@ async function createSandbox(args) {
     if (toolWhitelist) {
       await transferFile(toolWhitelist, sandboxName, '/home/owner/cmd/tool_whitelist.txt', 'tool whitelist');
     }
-    
+
+    // BEGIN NEW SECTION: Transfer GitHub integration parameter files
+    // Write GitHub repo
+    if (args.r) {
+      await transferFile(args.r, sandboxName, '/home/owner/cmd/github_repo.txt', 'GitHub repo');
+    }
+    // Write GitHub token (avoid echoing token in logs)
+    if (args.ght) {
+      await transferFile(args.ght, sandboxName, '/home/owner/cmd/github_token.txt', 'GitHub token');
+    }
+    // Write branch / PR / issue identifiers and action type
+    const actionType = args.pr ? 'pr' : args.i ? 'issue' : args.b ? 'branch' : '';
+    if (args.b) {
+      await transferFile(args.b, sandboxName, '/home/owner/cmd/github_branch.txt', 'GitHub branch');
+    }
+    if (args.pr) {
+      await transferFile(args.pr.toString(), sandboxName, '/home/owner/cmd/pr_number.txt', 'PR number');
+    }
+    if (args.i) {
+      await transferFile(args.i.toString(), sandboxName, '/home/owner/cmd/issue_number.txt', 'Issue number');
+    }
+    if (actionType) {
+      await transferFile(actionType, sandboxName, '/home/owner/cmd/action_type.txt', 'action type');
+    }
+    // END NEW SECTION
+
     console.log(`\n🚀 Sandbox "${sandboxName}" created successfully with all configurations!`);
     
     // If debug mode is enabled, execute the worker and wait for completion
