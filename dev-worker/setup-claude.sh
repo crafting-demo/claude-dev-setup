@@ -176,6 +176,16 @@ cd "$HOME/claude" || {
 configure_local_mcp_server() {
     local local_mcp_file="$HOME/cmd/local_mcp_tools.txt"
     
+    print_status "Current directory before MCP config: $(pwd)"
+    print_status "Current user: $(whoami)"
+    
+    cd "$HOME/claude" || {
+        print_error "Could not change to claude workspace directory"
+        return 1
+    }
+    
+    print_status "Changed to directory: $(pwd)"
+    
     if [ -f "$local_mcp_file" ]; then
         print_status "Found local MCP tools configuration, setting up local MCP server..."
         
@@ -227,6 +237,9 @@ EOF
         else
             print_warning "No .mcp.json file found after configuration attempt"
         fi
+        # After creating .mcp.json manually
+        chown owner:owner .mcp.json 2>/dev/null || true
+        print_status "Set .mcp.json ownership to owner:owner"
     else
         print_status "No local MCP tools configuration found, skipping local server setup"
     fi
@@ -354,6 +367,8 @@ setup_prompt() {
 }
 
 # Execute MCP configuration steps
+print_status "Current directory before executing MCP config: $(pwd)"
+print_status "Current user: $(whoami)"
 configure_local_mcp_server
 configure_external_mcp_servers
 configure_tool_whitelist
