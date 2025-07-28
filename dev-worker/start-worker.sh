@@ -568,8 +568,23 @@ print_status "Pushing changes to origin/$BRANCH_NAME..."
 
 # Set up remote URL with token for this specific push if needed
 REPO_URL_WITH_TOKEN="https://github-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
-git remote set-url origin "$REPO_URL_WITH_TOKEN"
+print_status "Setting git remote URL with authentication token..."
 
+if git remote set-url origin "$REPO_URL_WITH_TOKEN"; then
+    print_success "Git remote URL updated with authentication token"
+    
+    # Verify the remote URL was set (safely, without exposing the token)
+    REMOTE_CHECK=$(git remote get-url origin)
+    if echo "$REMOTE_CHECK" | grep -q "github-token:"; then
+        print_status "Remote URL authentication verified"
+    else
+        print_warning "Remote URL may not have authentication token"
+    fi
+else
+    print_error "Failed to update git remote URL with token"
+fi
+
+print_status "Attempting to push to remote..."
 if git push origin "$BRANCH_NAME"; then
     print_success "Changes pushed to remote"
 else
@@ -581,6 +596,12 @@ else
         print_success "Changes pushed to remote (alternative method)"
     else
         print_error "All push attempts failed"
+        print_status "Debug info:"
+        echo "  Repository: $GITHUB_REPO"
+        echo "  Branch: $BRANCH_NAME"
+        echo "  Current working directory: $(pwd)"
+        echo "  Git status:"
+        git status --porcelain || echo "  Could not get git status"
         exit 1
     fi
 fi
