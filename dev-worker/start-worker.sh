@@ -642,9 +642,14 @@ else
             # Get the current working directory path for the project key
             project_path="$(pwd)"
             
-            # Use jq to update Claude configuration
+            # Use jq to update Claude configuration (separate commands for reliability)
             if command -v jq >/dev/null 2>&1; then
-                jq ".projects[\"$project_path\"] = (.projects[\"$project_path\"] // {}) | .projects[\"$project_path\"].enabledMcpjsonServers = [\"local_server\"] | .projects[\"$project_path\"].hasTrustDialogAccepted = true | .projects[\"$project_path\"].allowedTools = []" ~/.claude.json > ~/.claude.json.new && mv ~/.claude.json.new ~/.claude.json
+                # Set enabledMcpjsonServers
+                jq ".projects[\"$project_path\"].enabledMcpjsonServers = [\"local_server\"]" ~/.claude.json > ~/.claude.json.tmp1 && mv ~/.claude.json.tmp1 ~/.claude.json
+                # Set hasTrustDialogAccepted
+                jq ".projects[\"$project_path\"].hasTrustDialogAccepted = true" ~/.claude.json > ~/.claude.json.tmp2 && mv ~/.claude.json.tmp2 ~/.claude.json
+                # Set allowedTools (empty array for now)
+                jq ".projects[\"$project_path\"].allowedTools = []" ~/.claude.json > ~/.claude.json.tmp3 && mv ~/.claude.json.tmp3 ~/.claude.json
                 print_success "Claude configuration updated to enable MCP server and auto-accept trust"
             else
                 print_warning "jq not available, MCP server may require manual trust acceptance"
