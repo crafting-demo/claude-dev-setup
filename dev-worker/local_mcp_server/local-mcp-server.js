@@ -114,7 +114,8 @@ class LocalMCPServer {
       const { name, arguments: args } = request.params;
       
       console.log(`[LOCAL-MCP] =====================================`);
-      console.log(`[LOCAL-MCP] Executing tool: ${name}`);
+      console.log(`[LOCAL-MCP] 🔧 TOOL CALL INITIATED: ${name}`);
+      console.log(`[LOCAL-MCP] =====================================`);
       console.log(`[LOCAL-MCP] Arguments:`, JSON.stringify(args, null, 2));
       console.log(`[LOCAL-MCP] Available tools: ${this.tools.map(t => t.name).join(', ')}`);
       
@@ -210,7 +211,9 @@ class LocalMCPServer {
         maxBuffer: 1024 * 1024 * 10 // 10MB buffer
       });
       
-      console.log(`[LOCAL-MCP] Tool ${tool.name} completed successfully`);
+      console.log(`[LOCAL-MCP] =====================================`);
+      console.log(`[LOCAL-MCP] ✅ TOOL CALL COMPLETED: ${tool.name}`);
+      console.log(`[LOCAL-MCP] =====================================`);
       console.log(`[LOCAL-MCP] Raw result length: ${result.length} characters`);
       console.log(`[LOCAL-MCP] Result preview: ${result.substring(0, 300)}...`);
       return result.trim();
