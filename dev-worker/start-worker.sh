@@ -540,7 +540,7 @@ else
 fi
 
 # Run Claude Code
-if claude -p "$FINAL_PROMPT" --apply --yes --verbose; then
+if claude -p "$FINAL_PROMPT" --verbose; then
     print_success "Claude Code execution completed"
 else
     print_error "Claude Code execution failed"
