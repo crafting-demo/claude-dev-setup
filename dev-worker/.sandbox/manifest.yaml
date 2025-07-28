@@ -2,8 +2,7 @@ hooks:
   post-checkout:
     cmd: |      
       export CLI_SCRIPT=y
-      mkdir -p "$HOME/claude"
-      mkdir -p "$HOME/claude/claude-workspace"
+      mkdir -p "$HOME/claude"      
       mkdir -p "$HOME/cmd"
       
       # Install MCP dependencies with better error handling

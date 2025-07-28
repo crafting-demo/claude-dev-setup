@@ -35,6 +35,9 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Get the directory where this script is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Function to clean up corrupted Claude Code installations
 cleanup_claude_installation() {
     local claude_dir="$HOME/.npm-global/lib/node_modules/@anthropic-ai"
@@ -256,46 +259,8 @@ configure_external_mcp_servers() {
         if [ -s "$external_mcp_file" ]; then
             # Check if it's valid JSON
             if python3 -m json.tool "$external_mcp_file" > /dev/null 2>&1; then
-                # Parse JSON and configure servers
-                python3 << EOF
-import json
-import subprocess
-import sys
-
-try:
-    with open('$external_mcp_file', 'r') as f:
-        config = json.load(f)
-    
-    if 'servers' in config:
-        for server_name, server_config in config['servers'].items():
-            print(f"Configuring external MCP server: {server_name}")
-            
-            # Build claude mcp add command
-            cmd = ['claude', 'mcp', 'add', server_name, '--scope', 'project']
-            
-            if 'command' in server_config:
-                cmd.extend(['--command', server_config['command']])
-            
-            if 'args' in server_config:
-                for arg in server_config['args']:
-                    cmd.extend(['--args', arg])
-            
-            # Add environment variables if present
-            if 'env' in server_config:
-                for env_var, env_val in server_config['env'].items():
-                    cmd.extend(['--env', f'{env_var}={env_val}'])
-            
-            # Execute command
-            result = subprocess.run(cmd, capture_output=True, text=True)
-            if result.returncode == 0:
-                print(f"✓ Configured {server_name} successfully")
-            else:
-                print(f"✗ Failed to configure {server_name}: {result.stderr}")
-    
-except Exception as e:
-    print(f"Error parsing external MCP config: {e}")
-    sys.exit(1)
-EOF
+                # Parse JSON and configure servers using external script
+                "$SCRIPT_DIR/configure_external_mcp.py" "$external_mcp_file"
                 print_success "External MCP servers configured"
             else
                 print_error "Invalid JSON format in external MCP configuration"
@@ -320,15 +285,8 @@ configure_tool_whitelist() {
             # Check if it's JSON format or newline-separated
             if python3 -m json.tool "$whitelist_file" > /dev/null 2>&1; then
                 print_status "Processing JSON format tool whitelist"
-                # Extract tools from JSON array
-                python3 -c "
-import json
-with open('$whitelist_file', 'r') as f:
-    tools = json.load(f)
-    if isinstance(tools, list):
-        for tool in tools:
-            print(tool)
-" > /tmp/tool_whitelist.tmp
+                # Extract tools from JSON array using external script
+                "$SCRIPT_DIR/process_tool_whitelist.py" "$whitelist_file" > /tmp/tool_whitelist.tmp
             else
                 print_status "Processing text format tool whitelist"
                 # Assume newline-separated format

@@ -555,10 +555,6 @@ async function createSandbox(args) {
         });
       });
       
-    } else {
-      console.log(`\nNext steps:`);
-      console.log(`  1. Connect to sandbox: cs ssh ${sandboxName}`);
-      console.log(`  2. Initialize worker: ~/dev-worker/start-worker.sh`);
     }
     
   } catch (error) {
