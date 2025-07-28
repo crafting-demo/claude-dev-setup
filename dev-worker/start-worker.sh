@@ -475,7 +475,7 @@ if [ -f "$WORKSPACE_DIR/.mcp.json" ]; then
     print_status "Configuring Claude to auto-accept MCP server trust and enable local_server..."
     if [ -f "$HOME/.claude.json" ]; then
         # Get the current working directory path for the project key
-        local project_path="$(pwd)"
+        project_path="$(pwd)"
         
         # Use jq to update Claude configuration
         if command -v jq >/dev/null 2>&1; then
