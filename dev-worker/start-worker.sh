@@ -599,6 +599,14 @@ else
     exit 1
 fi
 
+# Test Claude MCP configuration
+print_status "Testing Claude MCP configuration..."
+if claude mcp list 2>&1; then
+    print_success "Claude MCP list command succeeded"
+else
+    print_warning "Claude MCP list command failed - MCP may not be properly configured"
+fi
+
 # Test Claude Code with a simple hello command  
 print_status "Testing Claude Code with a simple command..."
 if claude -p "Say hello" --verbose 2>&1; then
@@ -636,27 +644,7 @@ else
     if claude -p "$FINAL_PROMPT" --verbose; then
         print_success "Claude Code execution completed"
         
-        # Auto-accept trust dialog and enable MCP servers (after Claude runs and creates project config)
-        print_status "Configuring Claude to auto-accept MCP server trust and enable local_server..."
-        if [ -f "$HOME/.claude.json" ]; then
-            # Get the current working directory path for the project key
-            project_path="$(pwd)"
-            
-            # Use jq to update Claude configuration (separate commands for reliability)
-            if command -v jq >/dev/null 2>&1; then
-                # Set enabledMcpjsonServers
-                jq ".projects[\"$project_path\"].enabledMcpjsonServers = [\"local_server\"]" ~/.claude.json > ~/.claude.json.tmp1 && mv ~/.claude.json.tmp1 ~/.claude.json
-                # Set hasTrustDialogAccepted
-                jq ".projects[\"$project_path\"].hasTrustDialogAccepted = true" ~/.claude.json > ~/.claude.json.tmp2 && mv ~/.claude.json.tmp2 ~/.claude.json
-                # Set allowedTools (empty array for now)
-                jq ".projects[\"$project_path\"].allowedTools = []" ~/.claude.json > ~/.claude.json.tmp3 && mv ~/.claude.json.tmp3 ~/.claude.json
-                print_success "Claude configuration updated to enable MCP server and auto-accept trust"
-            else
-                print_warning "jq not available, MCP server may require manual trust acceptance"
-            fi
-        else
-            print_warning "No Claude configuration file found, MCP server may require manual setup"
-        fi
+
     else
         print_error "Claude Code execution failed"
         echo "Available commands in PATH:"
