@@ -140,7 +140,6 @@ if command_exists claude; then
         echo "  3. Start using Claude Code: claude"
         echo
         print_warning "Note: You'll need to authenticate with your Anthropic API key when you first run Claude Code"
-        print_status "Skipping reinstall but continuing with MCP configuration..."
     fi
 fi
 

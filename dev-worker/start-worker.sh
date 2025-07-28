@@ -399,7 +399,8 @@ setup_mcp_cleanup() {
 
 # Execute MCP server management
 setup_mcp_cleanup
-start_local_mcp_server
+# The MCP server is now started on-demand by Claude Code through .mcp.json, so manual startup is not needed.
+# start_local_mcp_server
 
 # Verify MCP configuration is ready
 print_status "Verifying MCP configuration readiness..."
