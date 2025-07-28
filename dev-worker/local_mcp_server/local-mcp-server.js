@@ -165,7 +165,8 @@ class LocalMCPServer {
     
     // Build the Claude command based on tool configuration
     let claudeCommand;
-    const input = args.input || "";
+    // Extract input from tool-specific parameters (e.g., question, input, etc.)
+    const input = args.question || args.input || "";
     const continueSession = args.continue_session || false;
     
     console.log(`[LOCAL-MCP] Input: "${input}"`);
