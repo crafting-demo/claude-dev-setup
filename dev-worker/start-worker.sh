@@ -304,22 +304,23 @@ start_local_mcp_server() {
         
         # In debug mode, show MCP logs in real-time; otherwise redirect to file
         if [ "$DEBUG_MODE" = "true" ]; then
-            print_status "Debug mode: MCP server logs will appear in real-time output"
-            # Run as owner user if we're not already
+            print_status "Debug mode: Starting MCP server with real-time logging"
+            # In debug mode, start server normally but also tail its log file in background
             if [ "$(whoami)" = "owner" ]; then
-                # Use named pipe to prefix MCP logs and merge with main output
-                mkfifo mcp-output.pipe 2>/dev/null || true
-                (while IFS= read -r line; do echo "[MCP-SERVER] $line"; done < mcp-output.pipe) &
-                MCP_LOG_PID=$!
-                node local-mcp-server.js > mcp-output.pipe 2>&1 &
+                nohup node local-mcp-server.js > mcp-server.log 2>&1 &
             else
-                mkfifo mcp-output.pipe 2>/dev/null || true
-                (while IFS= read -r line; do echo "[MCP-SERVER] $line"; done < mcp-output.pipe) &
-                MCP_LOG_PID=$!
-                sudo -u owner node local-mcp-server.js > mcp-output.pipe 2>&1 &
+                nohup sudo -u owner node local-mcp-server.js > mcp-server.log 2>&1 &
             fi
             MCP_SERVER_PID=$!
-            echo $MCP_LOG_PID > "$HOME/cmd/mcp_log.pid"
+            
+            # Start log tailing process to show MCP logs in real-time
+            sleep 1  # Give server a moment to start
+            if [ -f mcp-server.log ]; then
+                (tail -f mcp-server.log | while IFS= read -r line; do echo "[MCP-SERVER] $line"; done) &
+                MCP_LOG_PID=$!
+                echo $MCP_LOG_PID > "$HOME/cmd/mcp_log.pid"
+                print_status "MCP server logs will be prefixed with [MCP-SERVER] in real-time"
+            fi
         else
             # Normal mode: redirect to log file
             if [ "$(whoami)" = "owner" ]; then
@@ -338,7 +339,7 @@ start_local_mcp_server() {
             print_success "Local MCP server started successfully (PID: $MCP_SERVER_PID)"
             echo $MCP_SERVER_PID > "$HOME/cmd/mcp_server.pid"
             if [ "$DEBUG_MODE" = "true" ]; then
-                print_status "MCP server logs will be prefixed with [MCP-SERVER] in output above"
+                print_status "MCP server running - tool calls will appear with [MCP-SERVER] prefix"
             fi
         else
             print_warning "Local MCP server did not remain running (non-fatal)."
@@ -387,8 +388,7 @@ setup_mcp_cleanup() {
                 kill -9 "$log_pid" 2>/dev/null || true
             fi
             rm -f "$HOME/cmd/mcp_log.pid"
-            # Clean up named pipe
-            rm -f "$HOME/claude/dev-worker/local_mcp_server/mcp-output.pipe" 2>/dev/null || true
+            # No additional cleanup needed for log tailing approach
             print_success "MCP log process cleanup completed"
         fi
     }
@@ -603,13 +603,31 @@ else
 fi
 
 # Run Claude Code
-if claude -p "$FINAL_PROMPT" --verbose; then
-    print_success "Claude Code execution completed"
+if [ "$DEBUG_MODE" = "true" ]; then
+    # Debug mode: run Claude in background so MCP logs can interleave in real-time
+    print_status "Debug mode: Running Claude Code with real-time MCP log streaming..."
+    claude -p "$FINAL_PROMPT" --verbose &
+    CLAUDE_PID=$!
+    
+    # Wait for Claude to complete while allowing MCP logs to stream
+    if wait $CLAUDE_PID; then
+        print_success "Claude Code execution completed"
+    else
+        print_error "Claude Code execution failed"
+        echo "Available commands in PATH:"
+        which claude 2>/dev/null || echo "claude command not found"
+        exit 1
+    fi
 else
-    print_error "Claude Code execution failed"
-    echo "Available commands in PATH:"
-    which claude 2>/dev/null || echo "claude command not found"
-    exit 1
+    # Normal mode: synchronous execution
+    if claude -p "$FINAL_PROMPT" --verbose; then
+        print_success "Claude Code execution completed"
+    else
+        print_error "Claude Code execution failed"
+        echo "Available commands in PATH:"
+        which claude 2>/dev/null || echo "claude command not found"
+        exit 1
+    fi
 fi
 
 # Check if there are any changes (including untracked files, excluding .claude directory)
