@@ -479,7 +479,7 @@ if [ -f "$WORKSPACE_DIR/.mcp.json" ]; then
         
         # Use jq to update Claude configuration
         if command -v jq >/dev/null 2>&1; then
-            jq ".projects[\"$project_path\"].enabledMcpjsonServers = [\"local_server\"] | .projects[\"$project_path\"].hasTrustDialogAccepted = true | .projects[\"$project_path\"].allowedTools = []" ~/.claude.json > ~/.claude.json.new && mv ~/.claude.json.new ~/.claude.json
+            jq ".projects[\"$project_path\"] = (.projects[\"$project_path\"] // {}) | .projects[\"$project_path\"].enabledMcpjsonServers = [\"local_server\"] | .projects[\"$project_path\"].hasTrustDialogAccepted = true | .projects[\"$project_path\"].allowedTools = []" ~/.claude.json > ~/.claude.json.new && mv ~/.claude.json.new ~/.claude.json
             print_success "Claude configuration updated to enable MCP server and auto-accept trust"
         else
             print_warning "jq not available, MCP server may require manual trust acceptance"
@@ -650,6 +650,23 @@ else
     # Normal mode: synchronous execution
     if claude -p "$FINAL_PROMPT" --verbose; then
         print_success "Claude Code execution completed"
+        
+        # Auto-accept trust dialog and enable MCP servers (after Claude runs and creates project config)
+        print_status "Configuring Claude to auto-accept MCP server trust and enable local_server..."
+        if [ -f "$HOME/.claude.json" ]; then
+            # Get the current working directory path for the project key
+            project_path="$(pwd)"
+            
+            # Use jq to update Claude configuration
+            if command -v jq >/dev/null 2>&1; then
+                jq ".projects[\"$project_path\"] = (.projects[\"$project_path\"] // {}) | .projects[\"$project_path\"].enabledMcpjsonServers = [\"local_server\"] | .projects[\"$project_path\"].hasTrustDialogAccepted = true | .projects[\"$project_path\"].allowedTools = []" ~/.claude.json > ~/.claude.json.new && mv ~/.claude.json.new ~/.claude.json
+                print_success "Claude configuration updated to enable MCP server and auto-accept trust"
+            else
+                print_warning "jq not available, MCP server may require manual trust acceptance"
+            fi
+        else
+            print_warning "No Claude configuration file found, MCP server may require manual setup"
+        fi
     else
         print_error "Claude Code execution failed"
         echo "Available commands in PATH:"
