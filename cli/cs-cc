@@ -508,7 +508,7 @@ async function createSandbox(args) {
     if (args.debug && args.debug.toLowerCase() === 'yes') {
       console.log(`\n🔧 DEBUG MODE: Starting worker execution and waiting for completion...`);
       
-      const workerCmd = `cs exec -t -u 1000 -W ${sandboxName}/claude -- stdbuf -oL -eL bash -i -c '~/claude/dev-worker/start-worker.sh'`;
+      const workerCmd = `cs exec -t -u 1000 -W ${sandboxName}/claude -- bash -i -c '~/claude/dev-worker/start-worker.sh'`;
       console.log(`Executing worker: ${workerCmd}`);
       console.log(`\n📡 REAL-TIME WORKER OUTPUT:\n${'='.repeat(80)}`);
       
