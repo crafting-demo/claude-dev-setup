@@ -425,30 +425,53 @@ print_success "Repository cloned successfully"
 
 # Create .claude directory and settings.local.json for permissions
 mkdir -p .claude
-cat > .claude/settings.local.json << EOF
-{
+
+# Generate permissions based on tool whitelist or use defaults
+print_status "Configuring Claude permissions based on tool whitelist..."
+
+# Default available tools (used as fallback if no whitelist provided)
+# Reference list of all available Claude tools:
+# Built-in: Read, Write, Edit, MultiEdit, LS, Glob, Grep, Bash, Task, TodoRead, TodoWrite, NotebookRead, NotebookEdit, WebFetch, WebSearch
+# MCP tools: Will be added dynamically based on configured MCP servers
+
+# Generate permissions using external script  
+PERMISSIONS_OUTPUT=$("$SCRIPT_DIR/generate_permissions_json.py" "$HOME/cmd/processed_tool_whitelist.txt" --format both 2>/dev/null)
+
+if [ $? -eq 0 ]; then
+    # Parse the output from the script
+    TOOL_COUNT=$(echo "$PERMISSIONS_OUTPUT" | grep "^TOOL_COUNT=" | cut -d'=' -f2)
+    STATUS=$(echo "$PERMISSIONS_OUTPUT" | grep "^STATUS=" | cut -d'=' -f2)
+    PERMISSIONS_JSON=$(echo "$PERMISSIONS_OUTPUT" | sed -n '/^---$/,$p' | tail -n +2)
+    
+    case "$STATUS" in
+        "whitelist")
+            print_status "Using tool whitelist from cs-cc configuration"
+            print_status "Configured $TOOL_COUNT tools from whitelist"
+            ;;
+        "fallback")
+            print_warning "No valid tool whitelist found, using default permissions"
+            print_status "Using $TOOL_COUNT default Claude tools"
+            ;;
+    esac
+    
+    # Show configured tools for verification
+    "$SCRIPT_DIR/generate_permissions_json.py" "$HOME/cmd/processed_tool_whitelist.txt" --format info | grep "^TOOLS=" | cut -d'=' -f2 | sed 's/^/  Tools: /' | tr ',' ' '
+else
+    print_error "Failed to generate permissions, using emergency fallback"
+    PERMISSIONS_JSON='{
   "permissions": {
     "allow": [
-      "Read",
-      "Write",
-      "Edit",
-      "MultiEdit",
-      "LS",
-      "Glob",
-      "Grep",
-      "Bash",
-      "Task",
-      "TodoRead",
-      "TodoWrite",
-      "NotebookRead",
-      "NotebookEdit",
-      "WebFetch",
-      "WebSearch"
+      "Read", "Write", "Edit", "MultiEdit", "LS", "Glob", "Grep",
+      "Bash", "Task", "TodoRead", "TodoWrite", "NotebookRead", 
+      "NotebookEdit", "WebFetch", "WebSearch"
     ],
     "deny": []
   }
-}
-EOF
+}'
+fi
+
+# Create the settings.local.json with dynamic permissions
+echo "$PERMISSIONS_JSON" > .claude/settings.local.json
 
 # Branch management based on action type
 if [ "$ACTION_TYPE" = "issue" ]; then
