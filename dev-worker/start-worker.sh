@@ -464,6 +464,16 @@ cd target-repo
 
 print_success "Repository cloned successfully"
 
+# Copy MCP configuration to target-repo directory where Claude Code will run
+print_status "Copying MCP configuration to target repository..."
+if [ -f "$WORKSPACE_DIR/.mcp.json" ]; then
+    cp "$WORKSPACE_DIR/.mcp.json" .mcp.json
+    print_success "MCP configuration copied to target repository"
+    print_status "MCP config location: $(pwd)/.mcp.json"
+else
+    print_warning "No MCP configuration found at $WORKSPACE_DIR/.mcp.json"
+fi
+
 # Create .claude directory and settings.local.json for permissions
 mkdir -p .claude
 
