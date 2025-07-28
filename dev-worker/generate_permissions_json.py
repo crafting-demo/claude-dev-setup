@@ -44,7 +44,7 @@ def generate_permissions_json(whitelist_file_path, fallback_tools=None):
         # For compatibility with newer versions of Claude Code that expect allowedTools
         "allowedTools": tools,
         "ignorePatterns": [],
-        "enableAllProjectMcpServers": true
+        "enableAllProjectMcpServers": True
     }
     
     return permissions, len(tools), status
