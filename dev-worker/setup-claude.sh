@@ -242,23 +242,6 @@ EOF
         # After creating .mcp.json manually
         chown owner:owner .mcp.json 2>/dev/null || true
         print_status "Set .mcp.json ownership to owner:owner"
-        
-        # Auto-accept trust dialog and enable MCP servers
-        print_status "Configuring Claude to auto-accept MCP server trust and enable local_server..."
-        if [ -f "$HOME/.claude.json" ]; then
-            # Get the current working directory path for the project key
-            local project_path="/home/owner/claude/target-repo"
-            
-            # Use jq to update Claude configuration
-            if command -v jq >/dev/null 2>&1; then
-                jq ".projects[\"$project_path\"].enabledMcpjsonServers = [\"local_server\"] | .projects[\"$project_path\"].hasTrustDialogAccepted = true" ~/.claude.json > ~/.claude.json.new && mv ~/.claude.json.new ~/.claude.json
-                print_success "Claude configuration updated to enable MCP server and auto-accept trust"
-            else
-                print_warning "jq not available, MCP server may require manual trust acceptance"
-            fi
-        else
-            print_warning "Claude configuration file not found, MCP server may require manual trust acceptance"
-        fi
     else
         print_status "No local MCP tools configuration found, skipping local server setup"
     fi
