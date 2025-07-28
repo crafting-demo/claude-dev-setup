@@ -464,18 +464,21 @@ if [ -f "$WORKSPACE_DIR/.mcp.json" ]; then
     print_success "MCP configuration copied to target repository"
     print_status "MCP config location: $(pwd)/.mcp.json"
 
-# -----------------------------------------------------------------------------
-# Ensure the global Claude configuration (~/.claude.json) enables the local MCP
-# server for the *target-repo* directory we just set up. Without this entry the
-# `claude mcp list` command will report no servers even when .mcp.json exists.
-# -----------------------------------------------------------------------------
+    # -----------------------------------------------------------------------------
+    # Ensure the global Claude configuration (~/.claude.json) enables the local MCP
+    # server for the *target-repo* directory we just set up. Without this entry the
+    # `claude mcp list` command will report no servers even when .mcp.json exists.
+    # -----------------------------------------------------------------------------
 
-print_status "Patching global Claude config (~/.claude.json) for project scope..."
+    print_status "Patching global Claude config (~/.claude.json) for project scope..."
 
-if "$SCRIPT_DIR/patch_claude_config.py" "$(pwd)"; then
-    print_success "Global Claude config patched successfully"
+    if "$SCRIPT_DIR/patch_claude_config.py" "$(pwd)"; then
+        print_success "Global Claude config patched successfully"
+    else
+        print_warning "Failed to patch global Claude config (continuing anyway)"
+    fi
 else
-    print_warning "Failed to patch global Claude config (continuing anyway)"
+    print_warning "No MCP configuration found at $WORKSPACE_DIR/.mcp.json"
 fi
 
 # Create .claude directory and settings.local.json for permissions
