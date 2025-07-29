@@ -74,6 +74,11 @@ function parseArguments() {
           parsed.t = value;
           i++;
           break;
+        case '-template':
+        case '--template':
+          parsed.template = value;
+          i++;
+          break;
         case '-d':
         case '--delete-when-done':
           parsed.d = value;
@@ -123,6 +128,7 @@ Options:
   -mc, --mcp-config <value>      External MCP config string or file path (optional)
   -lmc, --local-mcp-config <value> Local MCP tools config string or file path (optional)
   -t, --tools <value>            Tool whitelist string or file path (optional)
+  -template, --template <value>  Custom template name (default: claude-code-automation)
   -d, --delete-when-done <yes|no> Delete sandbox when done (default: yes)
   -n, --name <name>              Sandbox name (default: auto-generated)
   --debug <yes|no>               Debug mode: wait for worker completion and show all output (default: no)
@@ -134,6 +140,7 @@ Examples:
   cs-cc -p prompt.txt -r "owner/repo" -ght "ghp_token" -i 456 -mc external_mcp.txt
   cs-cc -p "Implement feature" -pool my-pool -lmc local_tools.txt -t tool_whitelist.txt
   cs-cc -p "Debug workflow" -r "owner/repo" -ght "token" -b main --debug yes
+  cs-cc -p "Custom workflow" -template my-template -r "owner/repo" -ght "token" -b main
 `);
 }
 
@@ -371,7 +378,8 @@ async function createSandbox(args) {
     console.log(`Creating sandbox: ${sandboxName}`);
     
     // Build sandbox creation command
-    let cmd = `cs sandbox create ${sandboxName} -t claude-code-automation`;
+    const template = args.template || 'claude-code-automation';
+    let cmd = `cs sandbox create ${sandboxName} -t ${template}`;
     
     // Add pool option if specified
     if (args.pool) {
