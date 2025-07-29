@@ -1,28 +1,32 @@
-You are orchestrating a simple three-agent workflow to add a basic "CSV Export" feature. This is a quick demonstration of multi-agent collaboration.
+You need to implement a CSV export feature for this repository. The feature should allow users to export inventory data in CSV format.
 
-**SIMPLE WORKFLOW:**
+**FEATURE DEFINITION:**
+Create a system that exports inventory/product data to CSV files. Users should be able to click a button or link to download a CSV file containing product information like names, SKUs, quantities, prices, categories, and other relevant inventory fields.
 
-1. **Software Engineer**: Add a basic CSV export feature
-   • Create /api/export endpoint that returns sample CSV data
-   • Add "Export CSV" button to the main page
-   • Keep it simple and fast
+**TECHNICAL REQUIREMENTS:**
+- **Backend**: REST API endpoint (e.g., `/api/export` or `/export`) that generates and returns CSV data
+- **Frontend**: User interface element (button, link, or menu item) that triggers the CSV download
+- **Data Format**: Proper CSV with headers, comma-separated values, proper escaping for special characters
+- **Sample Data**: Include realistic inventory data (products, quantities, prices, etc.) for demonstration
 
-2. **QA Analyst**: Write one simple test
-   • Test that the export button exists
-   • Test that the API returns CSV data
-   • Just one basic test file
+**USER EXPERIENCE:**
+- Simple, intuitive way to access the export function
+- Immediate file download when triggered
+- Filename should be descriptive (e.g., "inventory-export-2024-01-15.csv")
+- Should work in standard web browsers
 
-3. **Documentation Writer**: Update README
-   • Add a brief section about the CSV export feature
-   • Just a few lines explaining what it does
+**AVAILABLE AGENTS:**
+- **software_engineer** - Can implement code, create APIs, build UI components
+- **qa_analyst** - Can write tests, validate functionality, ensure quality
+- **documentation_writer** - Can update docs, write user guides, document features
 
-**EXECUTION:**
-• Use local_server___software_engineer, local_server___qa_analyst, local_server___documentation_writer tools
-• Keep each phase simple and fast
-• Make actual file changes and commits
-• Create a pull request
+**DELIVERABLES:**
+- Working CSV export endpoint
+- UI element to trigger exports
+- Comprehensive test coverage
+- Updated documentation explaining the feature
 
-**GOAL:**
-Demonstrate multi-agent collaboration by having each agent contribute to a simple feature. Focus on speed and simplicity.
+**APPROACH:**
+Coordinate with the available agents to deliver a complete, working feature. Each agent brings different expertise - use them strategically based on what needs to be accomplished. The implementation should be practical and user-focused.
 
-Begin the workflow now. 
+Begin implementing this feature. 

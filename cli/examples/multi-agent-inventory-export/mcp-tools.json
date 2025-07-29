@@ -1,36 +1,36 @@
 [
   {
     "name": "software_engineer",
-    "description": "Implements a simple CSV export feature.",
-    "prompt": "You are a software engineer. Add a simple CSV export feature: 1) Create a basic /api/export endpoint that returns sample CSV data, 2) Add an 'Export CSV' button to the main page. Keep it simple - just create the files quickly.",
+    "description": "Implements features based on task description.",
+    "prompt": "You are a software engineer. Your task: {{task_description}}\n\nImplement this feature by creating the necessary code files, endpoints, and UI components. Focus on clean, working code that fulfills the requirements. Make actual file changes and ensure everything works properly.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "task_description": {"type": "string", "description": "Simple feature to implement"}
+        "task_description": {"type": "string", "description": "Detailed description of the feature or task to implement"}
       },
       "required": ["task_description"]
     }
   },
   {
-    "name": "qa_analyst",
-    "description": "Writes a simple test for the export feature.",
-    "prompt": "You are a QA engineer. Write one simple test file that validates the CSV export button exists and the API endpoint returns CSV data. Keep it basic and fast.",
+    "name": "qa_analyst", 
+    "description": "Writes tests based on implementation details.",
+    "prompt": "You are a QA engineer. Based on this implementation: {{implementation_notes}}\n\nWrite comprehensive tests that validate the functionality works correctly. Create test files that check both UI components and API endpoints. Focus on practical, executable tests that verify the feature works as intended.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "implementation_notes": {"type": "string", "description": "What was implemented"}
+        "implementation_notes": {"type": "string", "description": "Details about what was implemented and how it works"}
       },
       "required": ["implementation_notes"]
     }
   },
   {
     "name": "documentation_writer",
-    "description": "Updates README with export feature info.",
-    "prompt": "You are a technical writer. Add a brief section to the README.md about the new CSV export feature. Just a few lines explaining what it does and how to use it.",
+    "description": "Updates documentation based on feature details.",
+    "prompt": "You are a technical writer. Document this feature: {{feature_summary}}\n\nUpdate the README.md and any other relevant documentation to explain how to use this new functionality. Include usage examples, configuration details, and any important notes for users or developers.",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "feature_summary": {"type": "string", "description": "Brief summary of the feature"}
+        "feature_summary": {"type": "string", "description": "Comprehensive summary of the feature including functionality and usage"}
       },
       "required": ["feature_summary"]
     }

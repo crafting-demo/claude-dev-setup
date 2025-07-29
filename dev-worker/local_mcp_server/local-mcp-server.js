@@ -184,18 +184,33 @@ class LocalMCPServer {
     
     // Build the Claude command based on tool configuration
     let claudeCommand;
-    // Extract input from tool-specific parameters (e.g., question, input, etc.)
-    const input = args.question || args.input || "";
     const continueSession = args.continue_session || false;
     
-    mcpLog(`[LOCAL-MCP] Input: "${input}"`);
     mcpLog(`[LOCAL-MCP] Continue session: ${continueSession}`);
     
     if (tool.prompt) {
-      // Use the configured prompt template
-      const prompt = tool.prompt.replace(/\{input\}/g, input);
+      // Use the configured prompt template with dynamic parameter replacement
+      let prompt = tool.prompt;
+      
+      // Handle double-brace templating: {{parameter_name}}
+      mcpLog(`[LOCAL-MCP] Processing template parameters...`);
+      mcpLog(`[LOCAL-MCP] Available args:`, JSON.stringify(args, null, 2));
+      
+             // Replace {{parameter}} with values from args
+       prompt = prompt.replace(/\{\{([^}]+)\}\}/g, (match, paramName) => {
+         const paramValue = args[paramName];
+         if (paramValue !== undefined) {
+           mcpLog(`[LOCAL-MCP] Replacing {{${paramName}}} with: ${paramValue.substring(0, 100)}...`);
+           return paramValue;
+         } else {
+           mcpLog(`[LOCAL-MCP] Warning: Parameter {{${paramName}}} not found in args, leaving as-is`);
+           return match; // Leave the placeholder if parameter not found
+         }
+       });
+      
       mcpLog(`[LOCAL-MCP] Using configured prompt template`);
-      mcpLog(`[LOCAL-MCP] Prompt template: ${tool.prompt.substring(0, 200)}...`);
+      mcpLog(`[LOCAL-MCP] Original template: ${tool.prompt.substring(0, 200)}...`);
+      mcpLog(`[LOCAL-MCP] Final prompt: ${prompt.substring(0, 200)}...`);
       
       if (continueSession && this.sessions.has(tool.name)) {
         // Continue previous session
@@ -208,9 +223,29 @@ class LocalMCPServer {
         mcpLog(`[LOCAL-MCP] Starting new session for tool: ${tool.name}`);
       }
     } else {
-      // Default behavior: pass input directly to Claude
-      const prompt = `Execute this task: ${input}`;
+      // Default behavior: try to extract meaningful content from args or fall back to input
+      let taskContent = "";
+      
+      // Try to extract the main parameter from the tool's inputSchema
+      if (tool.inputSchema && tool.inputSchema.properties) {
+        const requiredProps = tool.inputSchema.required || [];
+        const mainParam = requiredProps[0]; // Use first required parameter
+        
+        if (mainParam && args[mainParam]) {
+          taskContent = args[mainParam];
+          mcpLog(`[LOCAL-MCP] Using main parameter '${mainParam}' as task content`);
+        }
+      }
+      
+             // Fallback to generic message if no content found
+       if (!taskContent) {
+         taskContent = "No task content provided";
+         mcpLog(`[LOCAL-MCP] No task content found in parameters`);
+       }
+      
+      const prompt = `Execute this task: ${taskContent}`;
       mcpLog(`[LOCAL-MCP] Using default prompt behavior`);
+      mcpLog(`[LOCAL-MCP] Task content: ${taskContent.substring(0, 100)}...`);
       
       if (continueSession && this.sessions.has(tool.name)) {
         claudeCommand = `claude -c -p "${prompt.replace(/"/g, '\\"')}"`;

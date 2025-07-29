@@ -4,19 +4,22 @@ This example demonstrates a three-agent workflow using the `cs-cc` CLI to add a 
 
 ## Overview
 
-The workflow involves three specialized agents:
+The workflow involves three specialized agents that use **dynamic inputs** to build upon each other's work:
 
-1. **Software Engineer** - Implements the core CSV export functionality
-   - Creates `/api/export` endpoint returning sample CSV data
-   - Adds "Export CSV" button to the main page
+1. **Software Engineer** - Implements features based on task descriptions
+   - Receives detailed task requirements as input
+   - Creates API endpoints and UI components accordingly
+   - Outputs implementation details for next agent
 
-2. **QA Analyst** - Writes tests for the new feature
-   - Tests that the export button exists
-   - Validates the API endpoint returns CSV data
+2. **QA Analyst** - Writes tests based on implementation details
+   - Receives implementation notes from the software engineer
+   - Creates comprehensive tests that match the actual implementation
+   - Validates both UI and API functionality
 
-3. **Documentation Writer** - Updates project documentation
-   - Adds a section to README about the CSV export feature
-   - Documents usage instructions
+3. **Documentation Writer** - Updates documentation based on feature details
+   - Receives comprehensive feature summary from previous agents
+   - Documents actual functionality and usage patterns
+   - Creates user-friendly documentation
 
 ## Files
 
@@ -63,11 +66,19 @@ The workflow involves three specialized agents:
 ## What Happens
 
 1. **Validation** - Script checks for required files and environment variables
-2. **Agent Orchestration** - Launches three specialized AI agents in sequence
-3. **Implementation** - Software engineer creates the CSV export feature
-4. **Testing** - QA analyst writes automated tests
-5. **Documentation** - Technical writer updates the README
+2. **Agent Orchestration** - Launches three specialized AI agents with dynamic inputs
+3. **Implementation** - Software engineer receives detailed task description and implements feature
+4. **Testing** - QA analyst receives implementation details and writes matching tests
+5. **Documentation** - Technical writer receives feature summary and creates comprehensive docs
 6. **GitHub Integration** - Changes are committed and a PR is created
+
+### Dynamic Input Flow
+
+- **Step 1**: Software Engineer gets specific task requirements
+- **Step 2**: QA Analyst gets implementation details from Step 1's output  
+- **Step 3**: Documentation Writer gets comprehensive feature details from both previous steps
+
+This demonstrates true multi-agent collaboration where each agent's work informs the next.
 
 ## Configuration
 
