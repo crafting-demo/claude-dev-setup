@@ -47,7 +47,7 @@ Options:
 
 ## Examples
 
-Comprehensive examples with multi-agent workflows, GitHub integration, and various configurations are available in the [`cli/` directory](./cli/).
+Comprehensive examples with multi-agent workflows, GitHub integration, and various configurations are available in the [cli directory](./cli/examples).
 
 ## Template Setup
 
