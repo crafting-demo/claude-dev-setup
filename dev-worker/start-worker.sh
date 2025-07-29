@@ -470,13 +470,13 @@ if [ -f "$WORKSPACE_DIR/.mcp.json" ]; then
     # `claude mcp list` command will report no servers even when .mcp.json exists.
     # -----------------------------------------------------------------------------
 
-    print_status "Patching global Claude config (~/.claude.json) for project scope..."
+    # print_status "Patching global Claude config (~/.claude.json) for project scope..."
 
-    if "$SCRIPT_DIR/patch_claude_config.py" "$(pwd)"; then
-        print_success "Global Claude config patched successfully"
-    else
-        print_warning "Failed to patch global Claude config (continuing anyway)"
-    fi
+    # if "$SCRIPT_DIR/patch_claude_config.py" "$(pwd)"; then
+    #     print_success "Global Claude config patched successfully"
+    # else
+    #     print_warning "Failed to patch global Claude config (continuing anyway)"
+    # fi
 else
     print_warning "No MCP configuration found at $WORKSPACE_DIR/.mcp.json"
 fi
