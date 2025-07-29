@@ -118,6 +118,7 @@ class LocalMCPServer {
       console.log(`[LOCAL-MCP] =====================================`);
       console.log(`[LOCAL-MCP] Arguments:`, JSON.stringify(args, null, 2));
       console.log(`[LOCAL-MCP] Available tools: ${this.tools.map(t => t.name).join(', ')}`);
+      console.log(`[LOCAL-MCP] Timestamp: ${new Date().toISOString()}`);
       
       // Find the tool definition
       const tool = this.tools.find(t => t.name === name);
@@ -217,6 +218,7 @@ class LocalMCPServer {
       console.log(`[LOCAL-MCP] =====================================`);
       console.log(`[LOCAL-MCP] Raw result length: ${result.length} characters`);
       console.log(`[LOCAL-MCP] Result preview: ${result.substring(0, 300)}...`);
+      console.log(`[LOCAL-MCP] Completed at: ${new Date().toISOString()}`);
       return result.trim();
       
     } catch (error) {
@@ -245,8 +247,18 @@ class LocalMCPServer {
     // Connect the server
     await this.server.connect(transport);
     
+    console.log("[LOCAL-MCP] =====================================");
+    console.log("[LOCAL-MCP] 🚀 LOCAL MCP SERVER READY");
+    console.log("[LOCAL-MCP] =====================================");
     console.log("[LOCAL-MCP] Server started and listening on stdio");
     console.log(`[LOCAL-MCP] Serving ${this.tools.length} tools`);
+    if (this.tools.length > 0) {
+      console.log("[LOCAL-MCP] Available tools:");
+      this.tools.forEach(tool => {
+        console.log(`[LOCAL-MCP]   - ${tool.name}: ${tool.description || "No description"}`);
+      });
+    }
+    console.log("[LOCAL-MCP] Waiting for tool calls...");
   }
 }
 

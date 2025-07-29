@@ -332,7 +332,10 @@ start_local_mcp_server() {
             print_success "Local MCP server started successfully (PID: $MCP_SERVER_PID)"
             echo $MCP_SERVER_PID > "$HOME/cmd/mcp_server.pid"
             if [ "$DEBUG_MODE" = "true" ]; then
-                print_status "MCP server running - tool calls will appear with [MCP-SERVER] prefix"
+                print_status "🔧 MCP server running - tool calls will appear with [MCP-SERVER] prefix"
+                print_status "   Look for: [LOCAL-MCP] 🔧 TOOL CALL INITIATED messages"
+            else
+                print_status "MCP server running - logs saved to mcp-server.log"
             fi
         else
             print_warning "Local MCP server did not remain running (non-fatal)."
@@ -392,8 +395,17 @@ setup_mcp_cleanup() {
 
 # Execute MCP server management
 setup_mcp_cleanup
-# The MCP server is now started on-demand by Claude Code through .mcp.json, so manual startup is not needed.
-# start_local_mcp_server
+
+# Debug mode status
+if [ "$DEBUG_MODE" = "true" ]; then
+    print_status "🐛 DEBUG MODE ENABLED - MCP tool calls will be visible in real-time"
+else
+    print_status "📋 Normal mode - MCP tool calls will be logged to file"
+fi
+
+# Start the MCP server manually to ensure we capture tool call logs in real-time
+# Even though Claude Code can start it on-demand, we want the logging integration
+start_local_mcp_server
 
 # Verify MCP configuration is ready
 print_status "Verifying MCP configuration readiness..."
