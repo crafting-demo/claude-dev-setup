@@ -44,6 +44,28 @@ def patch_claude_config(project_path, server_name="local_server", claude_config_
     projects = data.setdefault('projects', {})
     proj_entry = projects.setdefault(project_path, {})
     
+    # Default allowed tools for Claude Code
+    default_tools = [
+        "Read", "Write", "Edit", "MultiEdit", "LS", "Glob", "Grep",
+        "Bash", "Task", "TodoRead", "TodoWrite", "NotebookRead", 
+        "NotebookEdit", "WebFetch", "WebSearch"
+    ]
+    
+    # Ensure allowedTools array contains the default tools
+    allowed_tools = proj_entry.setdefault('allowedTools', [])
+    tools_added = []
+    for tool in default_tools:
+        if tool not in allowed_tools:
+            allowed_tools.append(tool)
+            tools_added.append(tool)
+    
+    if tools_added:
+        print(f"[INFO] Added tools to allowedTools: {', '.join(tools_added)}")
+    
+    # Enable all project MCP servers
+    proj_entry['enableAllProjectMcpServers'] = True
+    print(f"[INFO] Set enableAllProjectMcpServers to true for {project_path}")
+    
     # Ensure enabledMcpjsonServers array contains the server
     enabled = proj_entry.setdefault('enabledMcpjsonServers', [])
     if server_name not in enabled:
