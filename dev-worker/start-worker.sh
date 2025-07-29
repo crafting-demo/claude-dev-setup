@@ -732,18 +732,40 @@ else
 fi
 
 # Check if there are any changes (including untracked files, excluding .claude directory)
-if git diff --quiet && git diff --cached --quiet && [ -z "$(git ls-files --others --exclude-standard | grep -v '^\.claude/')" ]; then
-    print_warning "No changes detected. Exiting."
+# OR if there are unpushed commits (from MCP agents)
+HAS_UNCOMMITTED_CHANGES=false
+HAS_UNPUSHED_COMMITS=false
+
+# Check for uncommitted changes
+if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard | grep -v '^\.claude/')" ]; then
+    HAS_UNCOMMITTED_CHANGES=true
+fi
+
+# Check for unpushed commits (MCP agents make commits directly)
+UNPUSHED_COUNT=$(git rev-list --count HEAD ^origin/main 2>/dev/null || echo 0)
+if [ "$UNPUSHED_COUNT" -gt 0 ]; then
+    HAS_UNPUSHED_COMMITS=true
+    print_status "Found $UNPUSHED_COUNT unpushed commits (likely from MCP agents)"
+fi
+
+# Exit only if there are NO uncommitted changes AND NO unpushed commits
+if [ "$HAS_UNCOMMITTED_CHANGES" = false ] && [ "$HAS_UNPUSHED_COMMITS" = false ]; then
+    print_warning "No changes detected (no uncommitted changes or unpushed commits). Exiting."
     exit 0
 fi
 
-print_status "Changes detected, proceeding with commit and push..."
-
-# Stage and commit changes (excluding .claude directory)
-git add . ':!.claude'
-COMMIT_MSG="Claude Code automation: $(echo "$FINAL_PROMPT" | head -c 50)..."
-git commit -m "$COMMIT_MSG"
-print_success "Changes committed"
+# Commit any uncommitted changes
+if [ "$HAS_UNCOMMITTED_CHANGES" = true ]; then
+    print_status "Changes detected, proceeding with commit..."
+    
+    # Stage and commit changes (excluding .claude directory)
+    git add . ':!.claude'
+    COMMIT_MSG="Claude Code automation: $(echo "$FINAL_PROMPT" | head -c 50)..."
+    git commit -m "$COMMIT_MSG"
+    print_success "Changes committed"
+else
+    print_status "No uncommitted changes to commit, proceeding with push of existing commits..."
+fi
 
 # Push changes
 print_status "Pushing changes to origin/$BRANCH_NAME..."
