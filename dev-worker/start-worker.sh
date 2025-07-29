@@ -614,7 +614,7 @@ fi
 
 # Test Claude Code with a simple hello command  
 print_status "Testing Claude Code with a simple command..."
-if claude -p "Say hello" --verbose 2>&1; then
+if claude --mcp-config .mcp.json -p "Say hello" --verbose 2>&1; then
     print_success "Claude test command succeeded"
 else
     EXIT_CODE=$?
@@ -632,7 +632,7 @@ fi
 if [ "$DEBUG_MODE" = "true" ]; then
     # Debug mode: run Claude in background so MCP logs can interleave in real-time
     print_status "Debug mode: Running Claude Code with real-time MCP log streaming..."
-    claude -p "$FINAL_PROMPT" --verbose &
+    claude --mcp-config .mcp.json -p "$FINAL_PROMPT" --verbose &
     CLAUDE_PID=$!
     
     # Wait for Claude to complete while allowing MCP logs to stream
@@ -646,7 +646,7 @@ if [ "$DEBUG_MODE" = "true" ]; then
     fi
 else
     # Normal mode: synchronous execution
-    if claude -p "$FINAL_PROMPT" --verbose; then
+    if claude --mcp-config .mcp.json -p "$FINAL_PROMPT" --verbose; then
         print_success "Claude Code execution completed"
         
 
