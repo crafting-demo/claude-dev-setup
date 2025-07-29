@@ -1,0 +1,38 @@
+[
+  {
+    "name": "software_engineer",
+    "description": "Implements a simple CSV export feature.",
+    "prompt": "You are a software engineer. Add a simple CSV export feature: 1) Create a basic /api/export endpoint that returns sample CSV data, 2) Add an 'Export CSV' button to the main page. Keep it simple - just create the files quickly.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "task_description": {"type": "string", "description": "Simple feature to implement"}
+      },
+      "required": ["task_description"]
+    }
+  },
+  {
+    "name": "qa_analyst",
+    "description": "Writes a simple test for the export feature.",
+    "prompt": "You are a QA engineer. Write one simple test file that validates the CSV export button exists and the API endpoint returns CSV data. Keep it basic and fast.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "implementation_notes": {"type": "string", "description": "What was implemented"}
+      },
+      "required": ["implementation_notes"]
+    }
+  },
+  {
+    "name": "documentation_writer",
+    "description": "Updates README with export feature info.",
+    "prompt": "You are a technical writer. Add a brief section to the README.md about the new CSV export feature. Just a few lines explaining what it does and how to use it.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "feature_summary": {"type": "string", "description": "Brief summary of the feature"}
+      },
+      "required": ["feature_summary"]
+    }
+  }
+] 

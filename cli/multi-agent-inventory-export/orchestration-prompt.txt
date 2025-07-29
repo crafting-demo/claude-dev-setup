@@ -1,0 +1,28 @@
+You are orchestrating a simple three-agent workflow to add a basic "CSV Export" feature. This is a quick demonstration of multi-agent collaboration.
+
+**SIMPLE WORKFLOW:**
+
+1. **Software Engineer**: Add a basic CSV export feature
+   • Create /api/export endpoint that returns sample CSV data
+   • Add "Export CSV" button to the main page
+   • Keep it simple and fast
+
+2. **QA Analyst**: Write one simple test
+   • Test that the export button exists
+   • Test that the API returns CSV data
+   • Just one basic test file
+
+3. **Documentation Writer**: Update README
+   • Add a brief section about the CSV export feature
+   • Just a few lines explaining what it does
+
+**EXECUTION:**
+• Use local_server___software_engineer, local_server___qa_analyst, local_server___documentation_writer tools
+• Keep each phase simple and fast
+• Make actual file changes and commits
+• Create a pull request
+
+**GOAL:**
+Demonstrate multi-agent collaboration by having each agent contribute to a simple feature. Focus on speed and simplicity.
+
+Begin the workflow now. 
