@@ -765,8 +765,32 @@ fi
 if [ "$HAS_UNCOMMITTED_CHANGES" = true ]; then
     print_status "Changes detected, proceeding with commit..."
     
-    # Stage and commit changes (excluding .claude directory)
-    git add . ':!.claude'
+    # Ensure Claude-specific files are in .gitignore to prevent accidental commits
+    print_status "Ensuring Claude configuration files are excluded from git tracking..."
+    
+    # Create or append to .gitignore with Claude-specific entries
+    if [ -f .gitignore ]; then
+        # Check if our entries already exist to avoid duplicates
+        if ! grep -q "^\.mcp\.json$" .gitignore; then
+            echo ".mcp.json" >> .gitignore
+            print_status "Added .mcp.json to .gitignore"
+        fi
+        if ! grep -q "^\.claude/$" .gitignore; then
+            echo ".claude/" >> .gitignore
+            print_status "Added .claude/ to .gitignore"
+        fi
+    else
+        # Create new .gitignore with Claude entries
+        cat > .gitignore << EOF
+# Claude Code automation configuration files
+.mcp.json
+.claude/
+EOF
+        print_status "Created .gitignore with Claude configuration exclusions"
+    fi
+    
+    # Stage and commit changes (now both .mcp.json and .claude are safely ignored by git)
+    git add .
     COMMIT_MSG="Claude Code automation: $(echo "$FINAL_PROMPT" | head -c 50)..."
     git commit -m "$COMMIT_MSG"
     print_success "Changes committed"
