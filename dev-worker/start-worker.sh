@@ -298,22 +298,65 @@ start_local_mcp_server() {
         # In debug mode, show MCP logs in real-time; otherwise redirect to file
         if [ "$DEBUG_MODE" = "true" ]; then
             print_status "Debug mode: Starting MCP server with real-time logging"
-            # In debug mode, start server normally but also tail its log file in background
+            
+            # OPTION 1: Direct stdout integration (immediate, no file needed)
+            # This sends MCP logs directly to stdout with [MCP-DIRECT] prefix
+            print_status "🔧 Using direct stdout integration for immediate MCP visibility"
             if [ "$(whoami)" = "owner" ]; then
-                nohup node local-mcp-server.js > mcp-server.log 2>&1 &
+                node local-mcp-server.js 2>&1 | sed 's/^/[MCP-DIRECT] /' &
             else
-                nohup sudo -u owner node local-mcp-server.js > mcp-server.log 2>&1 &
+                sudo -u owner node local-mcp-server.js 2>&1 | sed 's/^/[MCP-DIRECT] /' &
             fi
             MCP_SERVER_PID=$!
+            echo $MCP_SERVER_PID > "$HOME/cmd/mcp_server.pid"
+            print_status "✅ MCP server started with direct stdout integration"
+            sleep 2  # Give server time to start
             
-            # Start log tailing process to show MCP logs in real-time
-            sleep 1  # Give server a moment to start
-            if [ -f mcp-server.log ]; then
-                (tail -f mcp-server.log | while IFS= read -r line; do echo "[MCP-SERVER] $line"; done) &
-                MCP_LOG_PID=$!
-                echo $MCP_LOG_PID > "$HOME/cmd/mcp_log.pid"
-                print_status "MCP server logs will be prefixed with [MCP-SERVER] in real-time"
-            fi
+            # OPTION 2: Also maintain file-based tailing as backup
+            # (Commented out to avoid duplicate logs, but can be enabled if needed)
+            # 
+            # # In debug mode, start server normally but also tail its log file in background
+            # if [ "$(whoami)" = "owner" ]; then
+            #     nohup node local-mcp-server.js > mcp-server.log 2>&1 &
+            # else
+            #     nohup sudo -u owner node local-mcp-server.js > mcp-server.log 2>&1 &
+            # fi
+            # MCP_SERVER_PID=$!
+            # 
+            # # Start log tailing process to show MCP logs in real-time
+            # sleep 2  # Give server more time to start and create log file
+            # 
+            # # Create log file if it doesn't exist
+            # if [ ! -f mcp-server.log ]; then
+            #     touch mcp-server.log
+            #     print_status "Created MCP server log file"
+            # fi
+            # 
+            # # Start robust log tailing with error handling
+            # print_status "🔧 Starting MCP log integration..."
+            # (
+            #     # Wait for log file to have content or timeout after 10 seconds
+            #     timeout=10
+            #     while [ ! -s mcp-server.log ] && [ $timeout -gt 0 ]; do
+            #         sleep 1
+            #         timeout=$((timeout - 1))
+            #     done
+            #     
+            #     if [ -s mcp-server.log ]; then
+            #         print_status "✅ MCP log file ready, starting real-time streaming"
+            #         tail -f mcp-server.log | while IFS= read -r line; do 
+            #             echo "[MCP-SERVER] $line"
+            #         done
+            #     else
+            #         print_warning "⚠️  MCP log file empty after timeout, starting tail anyway"
+            #         tail -f mcp-server.log | while IFS= read -r line; do 
+            #             echo "[MCP-SERVER] $line"
+            #         done
+            #     fi
+            # ) &
+            # MCP_LOG_PID=$!
+            # echo $MCP_LOG_PID > "$HOME/cmd/mcp_log.pid"
+            # print_status "🔧 MCP server logs will be prefixed with [MCP-SERVER] in real-time"
         else
             # Normal mode: redirect to log file
             if [ "$(whoami)" = "owner" ]; then
@@ -374,18 +417,17 @@ setup_mcp_cleanup() {
             print_success "MCP server cleanup completed"
         fi
         
-        # Clean up MCP log process if running in debug mode
-        if [ -f "$HOME/cmd/mcp_log.pid" ]; then
-            local log_pid=$(cat "$HOME/cmd/mcp_log.pid")
-            print_status "Cleaning up MCP log process (PID: $log_pid)..."
+        # Clean up MCP log tail process if running in debug mode
+        if [ -f "$HOME/cmd/mcp_log_tail.pid" ]; then
+            local log_pid=$(cat "$HOME/cmd/mcp_log_tail.pid")
+            print_status "Cleaning up MCP log tail process (PID: $log_pid)..."
             if kill -0 "$log_pid" 2>/dev/null; then
                 kill "$log_pid" 2>/dev/null || true
                 sleep 1
                 kill -9 "$log_pid" 2>/dev/null || true
             fi
-            rm -f "$HOME/cmd/mcp_log.pid"
-            # No additional cleanup needed for log tailing approach
-            print_success "MCP log process cleanup completed"
+            rm -f "$HOME/cmd/mcp_log_tail.pid"
+            print_success "MCP log tail process cleanup completed"
         fi
     }
     
@@ -396,16 +438,35 @@ setup_mcp_cleanup() {
 # Execute MCP server management
 setup_mcp_cleanup
 
-# Debug mode status
+# Debug mode status and MCP log tailing setup
 if [ "$DEBUG_MODE" = "true" ]; then
     print_status "🐛 DEBUG MODE ENABLED - MCP tool calls will be visible in real-time"
+    
+    # Set up MCP log file tailing (server will create log when Claude starts it)
+    MCP_DEBUG_LOG="$HOME/cmd/mcp-server-debug.log"
+    print_status "🔧 Setting up MCP debug log monitoring at: $MCP_DEBUG_LOG"
+    
+    # Create empty log file and start tailing in background
+    touch "$MCP_DEBUG_LOG"
+    print_status "📋 Starting MCP log tail - tool calls will appear with [MCP-LOG] prefix"
+    
+    # Start tailing the debug log that MCP server will write to
+    (tail -f "$MCP_DEBUG_LOG" | while IFS= read -r line; do 
+        echo "[MCP-LOG] $line"
+    done) &
+    MCP_LOG_PID=$!
+    echo $MCP_LOG_PID > "$HOME/cmd/mcp_log_tail.pid"
+    
+    print_status "✅ MCP debug log monitoring active (PID: $MCP_LOG_PID)"
+    print_status "   Look for: [MCP-LOG] [LOCAL-MCP] 🔧 TOOL CALL INITIATED messages"
 else
-    print_status "📋 Normal mode - MCP tool calls will be logged to file"
+    print_status "📋 Normal mode - MCP tool calls will be logged to $HOME/cmd/mcp-server-debug.log"
 fi
 
-# Start the MCP server manually to ensure we capture tool call logs in real-time
-# Even though Claude Code can start it on-demand, we want the logging integration
-start_local_mcp_server
+# Don't start MCP server manually - let Claude start it on-demand
+# The server will now log to file regardless of how it's started
+print_status "🔧 MCP server will be started on-demand by Claude Code"
+print_status "   All tool calls will be captured in debug log file"
 
 # Verify MCP configuration is ready
 print_status "Verifying MCP configuration readiness..."

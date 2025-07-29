@@ -6,10 +6,28 @@ import {
   ListToolsRequestSchema,
   CallToolRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
-import { readFileSync, existsSync } from "fs";
+import { readFileSync, existsSync, appendFileSync } from "fs";
 import { execSync } from "child_process";
 import os from "os";
 import path from "path";
+
+// Enhanced logging that writes to both console and file
+const LOG_FILE = path.join(os.homedir(), "cmd", "mcp-server-debug.log");
+
+function mcpLog(message) {
+  const timestamp = new Date().toISOString();
+  const logLine = `${timestamp} ${message}`;
+  
+  // Always log to console (for Claude Code)
+  console.log(message);
+  
+  // Also log to file (for start-worker.sh tailing)
+  try {
+    appendFileSync(LOG_FILE, logLine + '\n');
+  } catch (error) {
+    // Silently fail if we can't write to log file
+  }
+}
 
 class LocalMCPServer {
   constructor() {
@@ -30,55 +48,55 @@ class LocalMCPServer {
   loadToolDefinitions() {
     const configPath = path.join(os.homedir(), "cmd", "local_mcp_tools.txt");
     
-    console.log(`[LOCAL-MCP] Looking for config at: ${configPath}`);
+    mcpLog(`[LOCAL-MCP] Looking for config at: ${configPath}`);
     
-    if (!existsSync(configPath)) {
-      console.error(`[LOCAL-MCP] Config file not found: ${configPath}`);
-      return;
-    }
+          if (!existsSync(configPath)) {
+        mcpLog(`[LOCAL-MCP] Config file not found: ${configPath}`);
+        return;
+      }
 
     try {
       const configContent = readFileSync(configPath, "utf-8");
-      console.log(`[LOCAL-MCP] Raw config content: ${configContent.substring(0, 200)}...`);
+      mcpLog(`[LOCAL-MCP] Raw config content: ${configContent.substring(0, 200)}...`);
       
       // Handle both JSON format and simple text format
       let toolsConfig;
       try {
         toolsConfig = JSON.parse(configContent);
       } catch (parseError) {
-        console.error(`[LOCAL-MCP] JSON parse error: ${parseError.message}`);
-        console.log("[LOCAL-MCP] Using simple text format for tool definitions");
+        mcpLog(`[LOCAL-MCP] JSON parse error: ${parseError.message}`);
+        mcpLog("[LOCAL-MCP] Using simple text format for tool definitions");
         return;
       }
 
       // The config should be an array directly, not wrapped in a "tools" property
       if (Array.isArray(toolsConfig)) {
         this.tools = toolsConfig;
-        console.log(`[LOCAL-MCP] Loaded ${this.tools.length} tool definitions from array format`);
+        mcpLog(`[LOCAL-MCP] Loaded ${this.tools.length} tool definitions from array format`);
         
         // Log tool names for debugging
         this.tools.forEach(tool => {
-          console.log(`[LOCAL-MCP] - ${tool.name}: ${tool.description || "No description"}`);
+          mcpLog(`[LOCAL-MCP] - ${tool.name}: ${tool.description || "No description"}`);
         });
       } else if (toolsConfig && toolsConfig.tools && Array.isArray(toolsConfig.tools)) {
         this.tools = toolsConfig.tools;
-        console.log(`[LOCAL-MCP] Loaded ${this.tools.length} tool definitions from wrapped format`);
+        mcpLog(`[LOCAL-MCP] Loaded ${this.tools.length} tool definitions from wrapped format`);
         
         // Log tool names for debugging
         this.tools.forEach(tool => {
-          console.log(`[LOCAL-MCP] - ${tool.name}: ${tool.description || "No description"}`);
+          mcpLog(`[LOCAL-MCP] - ${tool.name}: ${tool.description || "No description"}`);
         });
-      } else {
-        console.error("[LOCAL-MCP] Invalid tool configuration format");
-        console.error(`[LOCAL-MCP] Expected array or object with 'tools' property, got: ${typeof toolsConfig}`);
-        if (toolsConfig) {
-          console.error(`[LOCAL-MCP] Config keys: ${Object.keys(toolsConfig)}`);
+              } else {
+          mcpLog("[LOCAL-MCP] Invalid tool configuration format");
+          mcpLog(`[LOCAL-MCP] Expected array or object with 'tools' property, got: ${typeof toolsConfig}`);
+          if (toolsConfig) {
+            mcpLog(`[LOCAL-MCP] Config keys: ${Object.keys(toolsConfig)}`);
+          }
         }
+          } catch (error) {
+        mcpLog(`[LOCAL-MCP] Error loading tool definitions: ${error.message}`);
+        mcpLog(`[LOCAL-MCP] Stack trace: ${error.stack}`);
       }
-    } catch (error) {
-      console.error(`[LOCAL-MCP] Error loading tool definitions: ${error.message}`);
-      console.error(`[LOCAL-MCP] Stack trace: ${error.stack}`);
-    }
   }
 
   setupRequestHandlers() {
@@ -113,28 +131,28 @@ class LocalMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
       
-      console.log(`[LOCAL-MCP] =====================================`);
-      console.log(`[LOCAL-MCP] 🔧 TOOL CALL INITIATED: ${name}`);
-      console.log(`[LOCAL-MCP] =====================================`);
-      console.log(`[LOCAL-MCP] Arguments:`, JSON.stringify(args, null, 2));
-      console.log(`[LOCAL-MCP] Available tools: ${this.tools.map(t => t.name).join(', ')}`);
-      console.log(`[LOCAL-MCP] Timestamp: ${new Date().toISOString()}`);
+      mcpLog(`[LOCAL-MCP] =====================================`);
+      mcpLog(`[LOCAL-MCP] 🔧 TOOL CALL INITIATED: ${name}`);
+      mcpLog(`[LOCAL-MCP] =====================================`);
+      mcpLog(`[LOCAL-MCP] Arguments:`, JSON.stringify(args, null, 2));
+      mcpLog(`[LOCAL-MCP] Available tools: ${this.tools.map(t => t.name).join(', ')}`);
+      mcpLog(`[LOCAL-MCP] Timestamp: ${new Date().toISOString()}`);
       
       // Find the tool definition
       const tool = this.tools.find(t => t.name === name);
-      if (!tool) {
-        const error = `Tool not found: ${name}. Available tools: ${this.tools.map(t => t.name).join(', ')}`;
-        console.error(`[LOCAL-MCP] ${error}`);
-        throw new Error(error);
-      }
+              if (!tool) {
+          const error = `Tool not found: ${name}. Available tools: ${this.tools.map(t => t.name).join(', ')}`;
+          mcpLog(`[LOCAL-MCP] ${error}`);
+          throw new Error(error);
+        }
 
-      console.log(`[LOCAL-MCP] Found tool definition for: ${tool.name}`);
-      console.log(`[LOCAL-MCP] Tool prompt: ${tool.prompt?.substring(0, 100)}...`);
+      mcpLog(`[LOCAL-MCP] Found tool definition for: ${tool.name}`);
+      mcpLog(`[LOCAL-MCP] Tool prompt: ${tool.prompt?.substring(0, 100)}...`);
 
       try {
         const result = await this.executeTool(tool, args);
-        console.log(`[LOCAL-MCP] Tool execution completed successfully`);
-        console.log(`[LOCAL-MCP] Result length: ${result.length} characters`);
+        mcpLog(`[LOCAL-MCP] Tool execution completed successfully`);
+        mcpLog(`[LOCAL-MCP] Result length: ${result.length} characters`);
         return {
           content: [
             {
@@ -143,10 +161,10 @@ class LocalMCPServer {
             }
           ]
         };
-      } catch (error) {
-        console.error(`[LOCAL-MCP] Error executing tool ${name}:`, error.message);
-        console.error(`[LOCAL-MCP] Error stack:`, error.stack);
-        return {
+              } catch (error) {
+          mcpLog(`[LOCAL-MCP] Error executing tool ${name}: ${error.message}`);
+          mcpLog(`[LOCAL-MCP] Error stack: ${error.stack}`);
+          return {
           content: [
             {
               type: "text",
@@ -159,10 +177,10 @@ class LocalMCPServer {
   }
 
   async executeTool(tool, args) {
-    console.log(`[LOCAL-MCP] =====================================`);
-    console.log(`[LOCAL-MCP] executeTool called for: ${tool.name}`);
-    console.log(`[LOCAL-MCP] Tool configuration:`, JSON.stringify(tool, null, 2));
-    console.log(`[LOCAL-MCP] Arguments:`, JSON.stringify(args, null, 2));
+    mcpLog(`[LOCAL-MCP] =====================================`);
+    mcpLog(`[LOCAL-MCP] executeTool called for: ${tool.name}`);
+    mcpLog(`[LOCAL-MCP] Tool configuration:`, JSON.stringify(tool, null, 2));
+    mcpLog(`[LOCAL-MCP] Arguments:`, JSON.stringify(args, null, 2));
     
     // Build the Claude command based on tool configuration
     let claudeCommand;
@@ -170,29 +188,29 @@ class LocalMCPServer {
     const input = args.question || args.input || "";
     const continueSession = args.continue_session || false;
     
-    console.log(`[LOCAL-MCP] Input: "${input}"`);
-    console.log(`[LOCAL-MCP] Continue session: ${continueSession}`);
+    mcpLog(`[LOCAL-MCP] Input: "${input}"`);
+    mcpLog(`[LOCAL-MCP] Continue session: ${continueSession}`);
     
     if (tool.prompt) {
       // Use the configured prompt template
       const prompt = tool.prompt.replace(/\{input\}/g, input);
-      console.log(`[LOCAL-MCP] Using configured prompt template`);
-      console.log(`[LOCAL-MCP] Prompt template: ${tool.prompt.substring(0, 200)}...`);
+      mcpLog(`[LOCAL-MCP] Using configured prompt template`);
+      mcpLog(`[LOCAL-MCP] Prompt template: ${tool.prompt.substring(0, 200)}...`);
       
       if (continueSession && this.sessions.has(tool.name)) {
         // Continue previous session
         claudeCommand = `claude -c -p "${prompt.replace(/"/g, '\\"')}"`;
-        console.log(`[LOCAL-MCP] Continuing session for tool: ${tool.name}`);
+        mcpLog(`[LOCAL-MCP] Continuing session for tool: ${tool.name}`);
       } else {
         // Start new session 
         claudeCommand = `claude -p "${prompt.replace(/"/g, '\\"')}"`;
         this.sessions.set(tool.name, Date.now());
-        console.log(`[LOCAL-MCP] Starting new session for tool: ${tool.name}`);
+        mcpLog(`[LOCAL-MCP] Starting new session for tool: ${tool.name}`);
       }
     } else {
       // Default behavior: pass input directly to Claude
       const prompt = `Execute this task: ${input}`;
-      console.log(`[LOCAL-MCP] Using default prompt behavior`);
+      mcpLog(`[LOCAL-MCP] Using default prompt behavior`);
       
       if (continueSession && this.sessions.has(tool.name)) {
         claudeCommand = `claude -c -p "${prompt.replace(/"/g, '\\"')}"`;
@@ -202,41 +220,41 @@ class LocalMCPServer {
       }
     }
 
-    console.log(`[LOCAL-MCP] Final Claude command: ${claudeCommand}`);
+    mcpLog(`[LOCAL-MCP] Final Claude command: ${claudeCommand}`);
     
     try {
       // Execute the Claude command
-      console.log(`[LOCAL-MCP] Executing Claude command...`);
+      mcpLog(`[LOCAL-MCP] Executing Claude command...`);
       const result = execSync(claudeCommand, {
         encoding: "utf-8",
         timeout: 300000, // 5 minute timeout
         maxBuffer: 1024 * 1024 * 10 // 10MB buffer
       });
       
-      console.log(`[LOCAL-MCP] =====================================`);
-      console.log(`[LOCAL-MCP] ✅ TOOL CALL COMPLETED: ${tool.name}`);
-      console.log(`[LOCAL-MCP] =====================================`);
-      console.log(`[LOCAL-MCP] Raw result length: ${result.length} characters`);
-      console.log(`[LOCAL-MCP] Result preview: ${result.substring(0, 300)}...`);
-      console.log(`[LOCAL-MCP] Completed at: ${new Date().toISOString()}`);
+      mcpLog(`[LOCAL-MCP] =====================================`);
+      mcpLog(`[LOCAL-MCP] ✅ TOOL CALL COMPLETED: ${tool.name}`);
+      mcpLog(`[LOCAL-MCP] =====================================`);
+      mcpLog(`[LOCAL-MCP] Raw result length: ${result.length} characters`);
+      mcpLog(`[LOCAL-MCP] Result preview: ${result.substring(0, 300)}...`);
+      mcpLog(`[LOCAL-MCP] Completed at: ${new Date().toISOString()}`);
       return result.trim();
       
-    } catch (error) {
-      console.error(`[LOCAL-MCP] Claude execution failed for tool ${tool.name}`);
-      console.error(`[LOCAL-MCP] Command: ${claudeCommand}`);
-      console.error(`[LOCAL-MCP] Error message:`, error.message);
-      console.error(`[LOCAL-MCP] Error code:`, error.code);
-      console.error(`[LOCAL-MCP] Error signal:`, error.signal);
-      
-      // Clean up session if there was an error
-      this.sessions.delete(tool.name);
-      
-      throw new Error(`Claude execution failed: ${error.message}`);
-    }
+          } catch (error) {
+        mcpLog(`[LOCAL-MCP] Claude execution failed for tool ${tool.name}`);
+        mcpLog(`[LOCAL-MCP] Command: ${claudeCommand}`);
+        mcpLog(`[LOCAL-MCP] Error message: ${error.message}`);
+        mcpLog(`[LOCAL-MCP] Error code: ${error.code}`);
+        mcpLog(`[LOCAL-MCP] Error signal: ${error.signal}`);
+        
+        // Clean up session if there was an error
+        this.sessions.delete(tool.name);
+        
+        throw new Error(`Claude execution failed: ${error.message}`);
+      }
   }
 
   async start() {
-    console.log("[LOCAL-MCP] Starting local MCP server...");
+    mcpLog("[LOCAL-MCP] Starting local MCP server...");
     
     // Load initial tool definitions
     this.loadToolDefinitions();
@@ -247,18 +265,18 @@ class LocalMCPServer {
     // Connect the server
     await this.server.connect(transport);
     
-    console.log("[LOCAL-MCP] =====================================");
-    console.log("[LOCAL-MCP] 🚀 LOCAL MCP SERVER READY");
-    console.log("[LOCAL-MCP] =====================================");
-    console.log("[LOCAL-MCP] Server started and listening on stdio");
-    console.log(`[LOCAL-MCP] Serving ${this.tools.length} tools`);
-    if (this.tools.length > 0) {
-      console.log("[LOCAL-MCP] Available tools:");
-      this.tools.forEach(tool => {
-        console.log(`[LOCAL-MCP]   - ${tool.name}: ${tool.description || "No description"}`);
-      });
-    }
-    console.log("[LOCAL-MCP] Waiting for tool calls...");
+    mcpLog("[LOCAL-MCP] =====================================");
+    mcpLog("[LOCAL-MCP] 🚀 LOCAL MCP SERVER READY");
+    mcpLog("[LOCAL-MCP] =====================================");
+    mcpLog("[LOCAL-MCP] Server started and listening on stdio");
+    mcpLog(`[LOCAL-MCP] Serving ${this.tools.length} tools`);
+          if (this.tools.length > 0) {
+        mcpLog("[LOCAL-MCP] Available tools:");
+        this.tools.forEach(tool => {
+          mcpLog(`[LOCAL-MCP]   - ${tool.name}: ${tool.description || "No description"}`);
+        });
+      }
+    mcpLog("[LOCAL-MCP] Waiting for tool calls...");
   }
 }
 
@@ -268,19 +286,19 @@ async function main() {
     const server = new LocalMCPServer();
     await server.start();
   } catch (error) {
-    console.error("[LOCAL-MCP] Failed to start server:", error);
+    mcpLog(`[LOCAL-MCP] Failed to start server: ${error.message}`);
     process.exit(1);
   }
 }
 
 // Handle graceful shutdown
 process.on("SIGTERM", () => {
-  console.log("[LOCAL-MCP] Received SIGTERM, shutting down gracefully");
+  mcpLog("[LOCAL-MCP] Received SIGTERM, shutting down gracefully");
   process.exit(0);
 });
 
 process.on("SIGINT", () => {
-  console.log("[LOCAL-MCP] Received SIGINT, shutting down gracefully");
+  mcpLog("[LOCAL-MCP] Received SIGINT, shutting down gracefully");
   process.exit(0);
 });
 
