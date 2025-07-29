@@ -227,7 +227,7 @@ class LocalMCPServer {
       mcpLog(`[LOCAL-MCP] Executing Claude command...`);
       const result = execSync(claudeCommand, {
         encoding: "utf-8",
-        timeout: 300000, // 5 minute timeout
+        timeout: 900000, // 15 minute timeout (increased from 5 minutes)
         maxBuffer: 1024 * 1024 * 10 // 10MB buffer
       });
       
