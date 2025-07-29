@@ -22,13 +22,14 @@ This example demonstrates:
 ```bash
 cd multi-agent-inventory-export
 export GITHUB_TOKEN="your_token"
+export ANTHROPIC_API_KEY="your_anthropic_api_key"
 ./run-example.sh
 ```
 
 ## Prerequisites
 
 All examples require:
-- Built `cs-cc` CLI (available at `./cs-cc`)
+- Built `cs-cc` CLI (available at `../cs-cc`)
 - `GITHUB_TOKEN` environment variable set with repo access permissions
 - `ANTHROPIC_API_KEY` environment variable set with your Anthropic API key
 - Access to target GitHub repositories
@@ -73,6 +74,7 @@ When creating new examples:
 - **Permission errors**: Ensure scripts are executable (`chmod +x script.sh`)
 - **CLI not found**: Verify the CLI is built and path is correct
 - **GitHub access**: Check token permissions and repository access
+- **Anthropic API key issues**: Ensure your API key is valid and has sufficient credits
 - **Sandbox issues**: Verify Crafting account and credentials
 
 For example-specific issues, refer to the individual README files. 

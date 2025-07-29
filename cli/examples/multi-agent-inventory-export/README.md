@@ -31,7 +31,7 @@ The workflow involves three specialized agents:
 1. **Environment Setup**
    - `GITHUB_TOKEN` environment variable with repo access permissions
    - `ANTHROPIC_API_KEY` environment variable with your Anthropic API key
-   - Built `cs-cc` CLI available at `../cs-cc`
+   - Built `cs-cc` CLI available at `../../cs-cc`
 
 2. **GitHub Repository**
    - Target repo: `crafting-test1/claude_test`
@@ -47,7 +47,7 @@ The workflow involves three specialized agents:
 
 2. **Run the example:**
    ```bash
-   cd claude-dev-setup/cli/multi-agent-inventory-export
+   cd claude-dev-setup/cli/examples/multi-agent-inventory-export
    ./run-example.sh
    ```
 
