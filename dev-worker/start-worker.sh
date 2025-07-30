@@ -36,38 +36,39 @@ generate_pr_title() {
     
     print_status "Generating intelligent PR title using Claude..."
     
-    # Get a summary of changes made
+    # Get a summary of changes made (check for uncommitted changes or recent commits)
     local changes_summary=""
-    if git diff --name-only HEAD~1 HEAD >/dev/null 2>&1; then
-        changes_summary=$(git diff --name-only HEAD~1 HEAD | head -10 | tr '\n' ', ' | sed 's/,$//')
+    if git diff --name-only 2>/dev/null | head -5 | tr '\n' ' ' | sed 's/ $//' | grep -q .; then
+        # Uncommitted changes
+        changes_summary=$(git diff --name-only | head -5 | tr '\n' ' ' | sed 's/ $//')
+    elif git log --oneline -1 --name-only 2>/dev/null | tail -n +2 | head -5 | tr '\n' ' ' | sed 's/ $//' | grep -q .; then
+        # Recent commit files
+        changes_summary=$(git log --oneline -1 --name-only | tail -n +2 | head -5 | tr '\n' ' ' | sed 's/ $//')
     else
-        changes_summary="New files and modifications"
+        changes_summary="multiple files"
     fi
     
-    # Create a focused prompt for PR title generation
-    local title_prompt="Generate a concise, professional PR title (max 60 characters) for this code change:
-
-Context: $context_info
-Original task: $original_prompt
-Files changed: $changes_summary
-
-Requirements:
-- Start with a conventional commit type (feat:, fix:, docs:, refactor:, etc.)
-- Be specific about what was implemented/fixed
-- Keep it under 60 characters
-- Make it clear and actionable
-
-Just return the title, nothing else."
-
-    # Use Claude to generate the title (simple text generation, no MCP needed)
+    # Create a simple, single-line prompt to avoid shell issues
+    local task_summary=$(echo "$original_prompt" | head -c 100 | tr '\n' ' ' | sed 's/[^a-zA-Z0-9 ]//g')
+    local simple_prompt="Generate a professional git commit title (under 60 chars) for: $task_summary. Use conventional format like feat:, fix:, docs:, etc. Return ONLY the title."
+    
+    # Use Claude to generate the title with error visibility
     local generated_title=""
-    if generated_title=$(claude -p "$title_prompt" --output-format text 2>/dev/null | head -1 | tr -d '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); then
-        # Validate and clean the title
-        if [ -n "$generated_title" ] && [ ${#generated_title} -le 80 ]; then
+    local claude_output=""
+    print_status "Calling Claude for title generation..."
+    if claude_output=$(claude -p "$simple_prompt" --output-format text 2>&1); then
+        generated_title=$(echo "$claude_output" | head -1 | tr -d '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        
+        # Validate the title
+        if [ -n "$generated_title" ] && [ ${#generated_title} -le 70 ] && echo "$generated_title" | grep -q ":"; then
             print_success "Generated PR title: $generated_title"
             echo "$generated_title"
             return 0
+        else
+            print_warning "Generated title invalid: '$generated_title' (length: ${#generated_title})"
         fi
+    else
+        print_warning "Claude command failed: $claude_output"
     fi
     
     # Fallback to original behavior if Claude fails
