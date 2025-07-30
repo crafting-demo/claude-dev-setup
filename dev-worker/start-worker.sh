@@ -8,19 +8,19 @@ set -e  # Exit on any error
 
 # Function to print output without colors
 print_status() {
-    echo "[INFO] $1"
+    echo "[INFO] $1" >&2
 }
 
 print_success() {
-    echo "[SUCCESS] $1"
+    echo "[SUCCESS] $1" >&2
 }
 
 print_warning() {
-    echo "[WARNING] $1"
+    echo "[WARNING] $1" >&2
 }
 
 print_error() {
-    echo "[ERROR] $1"
+    echo "[ERROR] $1" >&2
 }
 
 # Function to check if command exists
@@ -155,28 +155,28 @@ fi
 
 # Debug: Print environment variables (safely)
 print_status "Environment variables from cs-cc CLI:"
-echo "GITHUB_REPO: $GITHUB_REPO"
-echo "GITHUB_TOKEN: $([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")"
-echo "ACTION_TYPE: $ACTION_TYPE"
-echo "PR_NUMBER: $PR_NUMBER"
-echo "ISSUE_NUMBER: $ISSUE_NUMBER"
-echo "GITHUB_BRANCH: $GITHUB_BRANCH"
-echo "FILE_PATH: $FILE_PATH"
-echo "LINE_NUMBER: $LINE_NUMBER"
-echo "SHOULD_DELETE: $SHOULD_DELETE"
-echo "SANDBOX_NAME: $SANDBOX_NAME"
-echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[not set]")"
+echo "GITHUB_REPO: $GITHUB_REPO" >&2
+echo "GITHUB_TOKEN: $([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")" >&2
+echo "ACTION_TYPE: $ACTION_TYPE" >&2
+echo "PR_NUMBER: $PR_NUMBER" >&2
+echo "ISSUE_NUMBER: $ISSUE_NUMBER" >&2
+echo "GITHUB_BRANCH: $GITHUB_BRANCH" >&2
+echo "FILE_PATH: $FILE_PATH" >&2
+echo "LINE_NUMBER: $LINE_NUMBER" >&2
+echo "SHOULD_DELETE: $SHOULD_DELETE" >&2
+echo "SANDBOX_NAME: $SANDBOX_NAME" >&2
+echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[not set]")" >&2
 
 # Validate required environment variables
 print_status "Validating environment variables..."
 
 if [ -z "$GITHUB_REPO" ] || [ -z "$GITHUB_TOKEN" ] || [ -z "$ACTION_TYPE" ]; then
     print_error "Missing required environment variables"
-    echo "Required: GITHUB_REPO, GITHUB_TOKEN, ACTION_TYPE"
-    echo "Current values:"
-    echo "GITHUB_REPO: '$GITHUB_REPO'"
-    echo "GITHUB_TOKEN: '$([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")'"
-    echo "ACTION_TYPE: '$ACTION_TYPE'"
+    echo "Required: GITHUB_REPO, GITHUB_TOKEN, ACTION_TYPE" >&2
+    echo "Current values:" >&2
+    echo "GITHUB_REPO: '$GITHUB_REPO'" >&2
+    echo "GITHUB_TOKEN: '$([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")'" >&2
+    echo "ACTION_TYPE: '$ACTION_TYPE'" >&2
     exit 1
 fi
 
@@ -709,13 +709,13 @@ fi
 
 # Execute Claude Code with the provided prompt
 print_status "Executing Claude Code..."
-echo "Prompt: $FINAL_PROMPT"
+echo "Prompt: $FINAL_PROMPT" >&2
 
 # Debug: Check if CLAUDE_PROMPT is effectively empty
 if [ -z "${FINAL_PROMPT// }" ]; then
     print_error "CLAUDE_PROMPT is empty or contains only whitespace"
-    echo "Raw CLAUDE_PROMPT value: '$CLAUDE_PROMPT'"
-    echo "Length: ${#CLAUDE_PROMPT}"
+    echo "Raw CLAUDE_PROMPT value: '$CLAUDE_PROMPT'" >&2
+    echo "Length: ${#CLAUDE_PROMPT}" >&2
     exit 1
 fi
 
@@ -880,11 +880,11 @@ else
     else
         print_error "All push attempts failed"
         print_status "Debug info:"
-        echo "  Repository: $GITHUB_REPO"
-        echo "  Branch: $BRANCH_NAME"
-        echo "  Current working directory: $(pwd)"
-        echo "  Git status:"
-        git status --porcelain || echo "  Could not get git status"
+        echo "  Repository: $GITHUB_REPO" >&2
+        echo "  Branch: $BRANCH_NAME" >&2
+        echo "  Current working directory: $(pwd)" >&2
+        echo "  Git status:" >&2
+        git status --porcelain || echo "  Could not get git status" >&2
         exit 1
     fi
 fi
@@ -1014,21 +1014,21 @@ fi
 print_success "=== Claude Code Automation Completed Successfully ==="
 
 # Print summary
-echo
+echo >&2
 print_status "Summary:"
-echo "  Repository: $GITHUB_REPO"
-echo "  Branch: $BRANCH_NAME"
-echo "  Action Type: $ACTION_TYPE"
+echo "  Repository: $GITHUB_REPO" >&2
+echo "  Branch: $BRANCH_NAME" >&2
+echo "  Action Type: $ACTION_TYPE" >&2
 if [ "$ACTION_TYPE" = "pr" ]; then
-    echo "  PR Number: $PR_NUMBER"
+    echo "  PR Number: $PR_NUMBER" >&2
 elif [ "$ACTION_TYPE" = "issue" ]; then
-    echo "  Issue Number: $ISSUE_NUMBER"
+    echo "  Issue Number: $ISSUE_NUMBER" >&2
 elif [ "$ACTION_TYPE" = "branch" ]; then
-    echo "  Target Branch: $GITHUB_BRANCH"
+    echo "  Target Branch: $GITHUB_BRANCH" >&2
 fi
-echo "  Changes: Committed and pushed"
-echo "  MCP Configuration: Applied from cs-cc parameters"
-echo
+echo "  Changes: Committed and pushed" >&2
+echo "  MCP Configuration: Applied from cs-cc parameters" >&2
+echo >&2
 print_success "🎉 Workflow completed successfully!"
 
 # Cleanup logic based on SHOULD_DELETE environment variable
