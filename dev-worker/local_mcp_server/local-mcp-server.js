@@ -154,6 +154,60 @@ class LocalMCPServer {
     }
   }
 
+  // Properly escape shell arguments to prevent injection and parsing issues
+  escapeShellArg(arg) {
+    // If the argument contains only safe characters, return it as-is
+    if (/^[a-zA-Z0-9._\-+=:@%\/]+$/.test(arg)) {
+      return `"${arg}"`;
+    }
+    
+    // For complex arguments, use single quotes and escape any single quotes inside
+    return `'${arg.replace(/'/g, "'\"'\"'")}'`;
+  }
+
+  // Handle long or complex prompts by using stdin piping instead of shell arguments
+  createPromptCommand(prompt, baseCommand) {
+    try {
+      // For complex prompts, use stdin piping to avoid shell escaping issues
+      if (this.shouldUsePromptFile(prompt)) {
+        // Use printf to handle complex prompts with proper escaping
+        // This avoids shell argument length limits and special character issues
+        const escapedPrompt = prompt.replace(/\\/g, '\\\\').replace(/'/g, "'\"'\"'");
+        const command = `printf '%s' '${escapedPrompt}' | ${baseCommand}`;
+        
+        mcpLog(`Using stdin piping for complex prompt`);
+        mcpLog(`Prompt length: ${prompt.length} characters`);
+        mcpLog(`Base command: ${baseCommand}`);
+        
+        return command;
+      } else {
+        // For simple prompts, use direct argument passing
+        return `${baseCommand} -p ${this.escapeShellArg(prompt)}`;
+      }
+    } catch (error) {
+      mcpLog(`Error creating prompt command: ${error.message}`);
+      throw error;
+    }
+  }
+
+  // Clean up method no longer needed but keeping for compatibility
+  cleanupPromptFile(filePath) {
+    // No-op since we're not using files anymore
+    mcpLog(`Cleanup called (no action needed for stdin approach)`);
+  }
+
+  // Determine if prompt should use stdin piping approach  
+  shouldUsePromptFile(prompt) {
+    // Use stdin piping for long prompts or prompts with complex content
+    return prompt.length > 2000 || 
+           prompt.includes('\n') || 
+           prompt.includes('"') ||
+           prompt.includes("'") ||
+           prompt.includes('`') ||
+           prompt.includes('$') ||
+           prompt.includes('\\');
+  }
+
   loadToolDefinitions() {
     const configPath = path.join(os.homedir(), "cmd", "local_mcp_tools.txt");
     
@@ -223,11 +277,6 @@ class LocalMCPServer {
               input: {
                 type: "string", 
                 description: "Input for the tool"
-              },
-              continue_session: {
-                type: "boolean",
-                description: "Whether to continue previous conversation context",
-                default: false
               }
             },
             required: ["input"]
@@ -293,13 +342,11 @@ class LocalMCPServer {
     
     // Check for previous persistent session
     const previousSession = this.getToolSession(tool.name);
-    const continueSession = args.continue_session || false;
     
     // Build the Claude command based on tool configuration
     let claudeCommand;
     let usingPreviousSession = false;
     
-    mcpLog(`Continue session: ${continueSession}`);
     mcpLog(`Previous persistent session: ${previousSession ? previousSession.sessionId : 'none'}`);
     
     if (tool.prompt) {
@@ -326,7 +373,7 @@ class LocalMCPServer {
       mcpLog(`Original template: ${tool.prompt.substring(0, 200)}...`);
       mcpLog(`Final prompt: ${prompt.substring(0, 200)}...`);
       
-      // Check if we should use previous persistent session or continue with in-memory session
+      // Check if we should use previous persistent session or start fresh
       if (previousSession && previousSession.sessionId) {
         // Change to the directory where the previous session was created
         const originalCwd = process.cwd();
@@ -335,16 +382,15 @@ class LocalMCPServer {
           process.chdir(previousSession.workingDirectory);
         }
         
-        claudeCommand = `claude --resume ${previousSession.sessionId} -p "${prompt.replace(/"/g, '\\"')}"`;
+        // Create command with proper prompt handling
+        const baseCommand = `claude --resume ${previousSession.sessionId}`;
+        claudeCommand = this.createPromptCommand(prompt, baseCommand);
         usingPreviousSession = true;
         mcpLog(`Resuming persistent session ${previousSession.sessionId} for tool: ${tool.name}`);
-      } else if (continueSession && this.sessions.has(tool.name)) {
-        // Continue previous session (legacy behavior)
-        claudeCommand = `claude -c -p "${prompt.replace(/"/g, '\\"')}"`;
-        mcpLog(`Continuing in-memory session for tool: ${tool.name}`);
       } else {
         // Start new session 
-        claudeCommand = `claude -p "${prompt.replace(/"/g, '\\"')}"`;
+        const baseCommand = `claude`;
+        claudeCommand = this.createPromptCommand(prompt, baseCommand);
         this.sessions.set(tool.name, Date.now());
         mcpLog(`Starting new session for tool: ${tool.name}`);
       }
@@ -373,7 +419,7 @@ class LocalMCPServer {
       mcpLog(`Using default prompt behavior`);
       mcpLog(`Task content: ${taskContent.substring(0, 100)}...`);
       
-      // Check if we should use previous persistent session or continue with in-memory session
+      // Check if we should use previous persistent session or start fresh
       if (previousSession && previousSession.sessionId) {
         // Change to the directory where the previous session was created
         const originalCwd = process.cwd();
@@ -382,14 +428,14 @@ class LocalMCPServer {
           process.chdir(previousSession.workingDirectory);
         }
         
-        claudeCommand = `claude --resume ${previousSession.sessionId} -p "${prompt.replace(/"/g, '\\"')}"`;
+        // Create command with proper prompt handling
+        const baseCommand = `claude --resume ${previousSession.sessionId}`;
+        claudeCommand = this.createPromptCommand(prompt, baseCommand);
         usingPreviousSession = true;
         mcpLog(`Resuming persistent session ${previousSession.sessionId} for tool: ${tool.name}`);
-      } else if (continueSession && this.sessions.has(tool.name)) {
-        claudeCommand = `claude -c -p "${prompt.replace(/"/g, '\\"')}"`;
-        mcpLog(`Continuing in-memory session for tool: ${tool.name}`);
       } else {
-        claudeCommand = `claude -p "${prompt.replace(/"/g, '\\"')}"`;
+        const baseCommand = `claude`;
+        claudeCommand = this.createPromptCommand(prompt, baseCommand);
         this.sessions.set(tool.name, Date.now());
         mcpLog(`Starting new session for tool: ${tool.name}`);
       }
@@ -426,6 +472,7 @@ class LocalMCPServer {
       mcpLog(`Raw result length: ${result.length} characters`);
       mcpLog(`Result preview: ${result.substring(0, 300)}...`);
       mcpLog(`Completed at: ${new Date().toISOString()}`);
+      
       return result.trim();
       
           } catch (error) {
@@ -438,7 +485,22 @@ class LocalMCPServer {
         // Clean up session if there was an error
         this.sessions.delete(tool.name);
         
-        throw new Error(`Claude execution failed: ${error.message}`);
+        // Return a helpful error message instead of throwing
+        // This allows the parent Claude to handle the error gracefully and potentially retry
+        const errorResponse = {
+          success: false,
+          error: `Tool execution failed: ${error.message}`,
+          details: {
+            tool: tool.name,
+            errorCode: error.code,
+            suggestion: error.message.includes('Syntax error') 
+              ? 'Shell parsing error with prompt. Using file-based approach for future calls.'
+              : 'Command execution failed. Please check the tool configuration and try again.'
+          }
+        };
+        
+        mcpLog(`Returning error response instead of throwing: ${JSON.stringify(errorResponse)}`);
+        return JSON.stringify(errorResponse);
       }
   }
 

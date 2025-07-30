@@ -1,32 +1,32 @@
 [
   {
-    "name": "software_engineer",
-    "description": "Implements features based on task description.",
-    "prompt": "You are a software engineer. Your task: {{task_description}}\n\nImplement this feature by creating the necessary code files, endpoints, and UI components. Focus on clean, working code that fulfills the requirements. Make actual file changes and ensure everything works properly.",
+    "name": "front_end_engineer",
+    "description": "Implements front-end features and UI components.",
+    "prompt": "You are a front-end engineer. Your task: {{ui_requirements}}\n\nImplement the user interface components, pages, and client-side functionality. Focus on clean, responsive UI code that provides a great user experience. Create the necessary React components, styles, and client-side logic.\n\n📝 IMPORTANT: After completing your implementation, commit your changes with a descriptive message like 'feat(frontend): implement [description]'",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "task_description": {"type": "string", "description": "Detailed description of the feature or task to implement"}
+        "ui_requirements": {"type": "string", "description": "Detailed description of the UI features and components to implement"}
       },
-      "required": ["task_description"]
+      "required": ["ui_requirements"]
     }
   },
   {
-    "name": "qa_analyst", 
-    "description": "Writes tests based on implementation details.",
-    "prompt": "You are a QA engineer. Based on this implementation: {{implementation_notes}}\n\nWrite comprehensive tests that validate the functionality works correctly. Create test files that check both UI components and API endpoints. Focus on practical, executable tests that verify the feature works as intended.",
+    "name": "back_end_engineer", 
+    "description": "Implements back-end APIs and server-side logic.",
+    "prompt": "You are a back-end engineer. Your task: {{api_requirements}}\n\nImplement the server-side functionality including APIs, database operations, and business logic. Focus on clean, efficient code that handles data processing, storage, and provides reliable endpoints for the front-end.\n\n📝 IMPORTANT: After completing your implementation, commit your changes with a descriptive message like 'feat(backend): implement [description]'",
     "inputSchema": {
       "type": "object",
       "properties": {
-        "implementation_notes": {"type": "string", "description": "Details about what was implemented and how it works"}
+        "api_requirements": {"type": "string", "description": "Detailed description of the API endpoints and server-side functionality to implement"}
       },
-      "required": ["implementation_notes"]
+      "required": ["api_requirements"]
     }
   },
   {
     "name": "documentation_writer",
     "description": "Updates documentation based on feature details.",
-    "prompt": "You are a technical writer. Document this feature: {{feature_summary}}\n\nUpdate the README.md and any other relevant documentation to explain how to use this new functionality. Include usage examples, configuration details, and any important notes for users or developers.",
+    "prompt": "You are a technical writer. Document this feature: {{feature_summary}}\n\nUpdate the README.md and any other relevant documentation to explain how to use this new functionality. Include usage examples, configuration details, and any important notes for users or developers.\n\n📝 IMPORTANT: After completing your documentation, commit your changes with a descriptive message like 'docs: add documentation for [description]'",
     "inputSchema": {
       "type": "object",
       "properties": {

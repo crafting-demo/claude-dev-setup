@@ -16,17 +16,28 @@ Create a system that exports inventory/product data to CSV files. Users should b
 - Should work in standard web browsers
 
 **AVAILABLE AGENTS:**
-- **software_engineer** - Can implement code, create APIs, build UI components
-- **qa_analyst** - Can write tests, validate functionality, ensure quality
-- **documentation_writer** - Can update docs, write user guides, document features
+- **front_end_engineer** - Specializes in UI components, client-side functionality, and user experience
+- **back_end_engineer** - Focuses on APIs, server-side logic, data processing, and backend infrastructure
+- **documentation_writer** - Updates documentation, writes user guides, and documents features
 
 **DELIVERABLES:**
 - Working CSV export endpoint
 - UI element to trigger exports
-- Comprehensive test coverage
 - Updated documentation explaining the feature
 
+**WORKFLOW:**
+Use an iterative approach with multiple rounds of feedback and revisions to demonstrate persistent session capabilities:
+
+1. **Initial Implementation**: Assign tasks to each specialized agent
+2. **Review & Feedback**: After each agent completes their work, carefully review the output for:
+   - Code quality and best practices
+   - Integration between frontend and backend
+   - User experience improvements
+   - Documentation completeness
+3. **Revision Cycles**: Go back to agents with specific feedback and requests for improvements
+4. **Cross-Agent Coordination**: Ensure frontend and backend work together seamlessly
+
 **APPROACH:**
-Coordinate with the available agents to deliver a complete, working feature. Each agent brings different expertise - use them strategically based on what needs to be accomplished. The implementation should be practical and user-focused.
+Coordinate with the available agents through multiple iterations to deliver a polished, working feature. Each agent brings specialized expertise - use them strategically and don't hesitate to ask for revisions or improvements. The goal is to showcase how persistent sessions enable sophisticated back-and-forth collaboration between agents.
 
 Begin implementing this feature. 

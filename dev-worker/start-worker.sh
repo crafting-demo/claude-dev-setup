@@ -28,6 +28,53 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to generate intelligent PR title using Claude
+generate_pr_title() {
+    local action_type="$1"
+    local context_info="$2"
+    local original_prompt="$3"
+    
+    print_status "Generating intelligent PR title using Claude..."
+    
+    # Get a summary of changes made
+    local changes_summary=""
+    if git diff --name-only HEAD~1 HEAD >/dev/null 2>&1; then
+        changes_summary=$(git diff --name-only HEAD~1 HEAD | head -10 | tr '\n' ', ' | sed 's/,$//')
+    else
+        changes_summary="New files and modifications"
+    fi
+    
+    # Create a focused prompt for PR title generation
+    local title_prompt="Generate a concise, professional PR title (max 60 characters) for this code change:
+
+Context: $context_info
+Original task: $original_prompt
+Files changed: $changes_summary
+
+Requirements:
+- Start with a conventional commit type (feat:, fix:, docs:, refactor:, etc.)
+- Be specific about what was implemented/fixed
+- Keep it under 60 characters
+- Make it clear and actionable
+
+Just return the title, nothing else."
+
+    # Use Claude to generate the title (simple text generation, no MCP needed)
+    local generated_title=""
+    if generated_title=$(claude -p "$title_prompt" --output-format text 2>/dev/null | head -1 | tr -d '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//'); then
+        # Validate and clean the title
+        if [ -n "$generated_title" ] && [ ${#generated_title} -le 80 ]; then
+            print_success "Generated PR title: $generated_title"
+            echo "$generated_title"
+            return 0
+        fi
+    fi
+    
+    # Fallback to original behavior if Claude fails
+    print_warning "Failed to generate PR title, using fallback"
+    echo "Automated changes: $(echo "$original_prompt" | head -c 40)..."
+}
+
 print_status "=== Claude Code Automation Workflow ==="
 
 # Step 1: Setup Claude Code and MCP configuration
@@ -694,7 +741,7 @@ fi
 
 # Test Claude Code with a simple hello command  
 print_status "Testing Claude Code with a simple command..."
-if claude --mcp-config .mcp.json -p "Say hello" --verbose 2>&1; then
+if claude -p "Say hello" --verbose 2>&1; then
     print_success "Claude test command succeeded"
 else
     EXIT_CODE=$?
@@ -844,7 +891,7 @@ fi
 # Handle PR creation/update based on action type
 if [ "$ACTION_TYPE" = "issue" ]; then
     print_status "Creating new pull request for issue #$ISSUE_NUMBER..."
-    PR_TITLE="Fix issue #$ISSUE_NUMBER: $(echo "$FINAL_PROMPT" | head -c 40)..."
+    PR_TITLE=$(generate_pr_title "issue" "Fixing issue #$ISSUE_NUMBER" "$FINAL_PROMPT")
     
     # Create PR body
     cat > /tmp/pr_body.txt << EOF
@@ -874,7 +921,7 @@ EOF
     
 elif [ "$ACTION_TYPE" = "pr" ]; then
     print_status "Creating new pull request related to PR #$PR_NUMBER..."
-    PR_TITLE="Related to PR #$PR_NUMBER: $(echo "$FINAL_PROMPT" | head -c 40)..."
+    PR_TITLE=$(generate_pr_title "pr" "Changes related to PR #$PR_NUMBER" "$FINAL_PROMPT")
     
     # Create PR body
     cat > /tmp/pr_related_body.txt << EOF
@@ -905,7 +952,7 @@ EOF
     
 elif [ "$ACTION_TYPE" = "create_pr" ]; then
     print_status "Creating new pull request for standalone task..."
-    PR_TITLE="Automated task: $(echo "$FINAL_PROMPT" | head -c 40)..."
+    PR_TITLE=$(generate_pr_title "create_pr" "Standalone automation task" "$FINAL_PROMPT")
     
     # Create PR body
     cat > /tmp/pr_task_body.txt << EOF
@@ -933,7 +980,7 @@ EOF
     
 elif [ "$ACTION_TYPE" = "branch" ]; then
     print_status "Creating pull request from branch $BRANCH_NAME to $GITHUB_BRANCH..."
-    PR_TITLE="Automated changes: $(echo "$FINAL_PROMPT" | head -c 40)..."
+    PR_TITLE=$(generate_pr_title "branch" "Changes for branch $GITHUB_BRANCH" "$FINAL_PROMPT")
     
     # Create PR body
     cat > /tmp/pr_branch_body.txt << EOF
@@ -960,6 +1007,8 @@ EOF
     # Clean up temp file
     rm -f /tmp/pr_branch_body.txt
 fi
+
+
 
 print_success "=== Claude Code Automation Completed Successfully ==="
 
