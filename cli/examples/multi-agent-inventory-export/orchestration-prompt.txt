@@ -50,22 +50,53 @@ After all agents have completed their work and you've conducted the revision cyc
    - All code follows best practices
    - Frontend and backend integrate seamlessly
 
-2. **Create a Pull Request** - Use GitHub tools to create a comprehensive pull request with:
-   - **Title**: Use conventional commit format like "feat: implement CSV export functionality with UI and documentation"
-   - **Description**: Include a detailed summary covering:
-     - Overview of the new CSV export feature
-     - Technical implementation details (API endpoint, UI components)
-     - Testing instructions for reviewers
-     - Links to any relevant documentation
-     - Screenshots or examples of the feature in action (if applicable)
-   - **Base branch**: main (or the default branch)
-   - **Source branch**: The current working branch created by the automation system
+2. **Create a new branch** - Use git commands to create a new feature branch for your work:
+   ```bash
+   git checkout -b csv-export-feature-$(date +%s)
+   ```
 
-3. **PR Documentation** - Ensure the pull request clearly shows:
-   - What files were created/modified by each agent
-   - How the feature works from a user perspective
-   - Any configuration or setup requirements
-   - Evidence that the feature has been tested
+3. **Commit your changes** - Stage and commit all your work:
+   ```bash
+   git add .
+   git commit -m "feat: implement CSV export functionality with UI and documentation"
+   ```
+
+4. **Push the branch** - Push your new branch to the remote repository:
+   ```bash
+   git push origin <branch-name>
+   ```
+
+5. **Create a Pull Request** - Use the `gh` tool to create a comprehensive pull request:
+   ```bash
+   gh pr create --title "✅ feat: implement CSV export functionality with UI and documentation" --body "
+   # CSV Export Feature Implementation
+
+   ## Overview
+   Implemented a complete CSV export feature allowing users to export inventory data in CSV format.
+
+   ## Technical Implementation
+   - **Backend**: REST API endpoint for CSV generation and download
+   - **Frontend**: User interface element (button/link) to trigger CSV exports
+   - **Documentation**: Updated user guides and feature documentation
+
+   ## Testing Instructions
+   1. Navigate to the inventory section
+   2. Click the 'Export CSV' button
+   3. Verify CSV file downloads with proper inventory data
+   4. Check that CSV format includes headers and proper data escaping
+
+   ## Files Modified
+   [List will be populated with actual files created/modified by agents]
+
+   ## Multi-Agent Collaboration
+   This feature demonstrates sophisticated coordination between:
+   - **front_end_engineer**: UI components and user experience
+   - **back_end_engineer**: API endpoint and data processing
+   - **documentation_writer**: Feature documentation and user guides
+   " --base main
+   ```
+
+**IMPORTANT**: The PR title MUST start with the ✅ emoji as the first character.
 
 The pull request should demonstrate the collaborative multi-agent workflow and provide reviewers with all necessary information to understand and test the new feature.
 

@@ -618,16 +618,7 @@ if [ -d "$TARGET_REPO_DIR" ]; then
     rm -rf "$TARGET_REPO_DIR"
 fi
 
-# Configure Git to use the GitHub token for authentication in automated environments
-print_status "Configuring Git authentication for automated environment..."
-git config --global credential.helper store
-git config --global user.name "Claude Code Automation"
-git config --global user.email "automation@claudecode.dev"
 
-# Set up Git credential store for this session
-echo "https://github-token:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
-
-print_success "Git authentication configured"
 
 # Clone the target repository
 print_status "Cloning repository: $GITHUB_REPO"
@@ -710,39 +701,7 @@ fi
 # Create the settings.local.json with dynamic permissions
 echo "$PERMISSIONS_JSON" > .claude/settings.local.json
 
-# Branch management based on action type
-if [ "$ACTION_TYPE" = "issue" ]; then
-    print_status "Creating new branch for issue #$ISSUE_NUMBER workflow..."
-    BRANCH_NAME="claude-issue-$ISSUE_NUMBER-$(date +%s)"
-    git checkout -b "$BRANCH_NAME"
-    print_success "Created new branch: $BRANCH_NAME"
-    
-elif [ "$ACTION_TYPE" = "pr" ]; then
-    print_status "Creating new branch based on PR #$PR_NUMBER..."
-    # Get the base branch of the PR
-    PR_BASE_BRANCH=$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)
-    if [ -z "$PR_BASE_BRANCH" ]; then
-        print_warning "Could not determine PR base branch, using main"
-        PR_BASE_BRANCH="main"
-    fi
-    print_status "PR #$PR_NUMBER base branch is: $PR_BASE_BRANCH"
-    
-    # Checkout the base branch and create new feature branch
-    git checkout "$PR_BASE_BRANCH"
-    BRANCH_NAME="claude-pr-$PR_NUMBER-$(date +%s)"
-    git checkout -b "$BRANCH_NAME"
-    print_success "Created new branch: $BRANCH_NAME (based on $PR_BASE_BRANCH)"
-    
-elif [ "$ACTION_TYPE" = "branch" ]; then
-    # Create a new feature branch based on the specified branch
-    print_status "Creating new branch based on: $GITHUB_BRANCH"
-    git checkout "$GITHUB_BRANCH"
-    BRANCH_NAME="claude-auto-$(date +%s)"
-    git checkout -b "$BRANCH_NAME"
-    print_success "Created new branch: $BRANCH_NAME (based on $GITHUB_BRANCH)"
-    
 
-fi
 
 # Prepend context to the prompt if available
 FINAL_PROMPT="$CLAUDE_PROMPT"
@@ -822,113 +781,29 @@ else
     exit 1
 fi
 
-# Check if there are any changes (including untracked files, excluding .claude directory)
-# OR if there are unpushed commits (from MCP agents)
-HAS_UNCOMMITTED_CHANGES=false
-HAS_UNPUSHED_COMMITS=false
+# Ensure Claude-specific files are in .gitignore to prevent accidental commits
+print_status "Ensuring Claude configuration files are excluded from git tracking..."
 
-# Check for uncommitted changes
-if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard | grep -v '^\.claude/')" ]; then
-    HAS_UNCOMMITTED_CHANGES=true
-fi
-
-# Check for unpushed commits (MCP agents make commits directly)
-UNPUSHED_COUNT=$(git rev-list --count HEAD ^origin/main 2>/dev/null || echo 0)
-if [ "$UNPUSHED_COUNT" -gt 0 ]; then
-    HAS_UNPUSHED_COMMITS=true
-    print_status "Found $UNPUSHED_COUNT unpushed commits (likely from MCP agents)"
-fi
-
-# Exit only if there are NO uncommitted changes AND NO unpushed commits
-if [ "$HAS_UNCOMMITTED_CHANGES" = false ] && [ "$HAS_UNPUSHED_COMMITS" = false ]; then
-    print_warning "No changes detected (no uncommitted changes or unpushed commits). Exiting."
-    exit 0
-fi
-
-# Commit any uncommitted changes
-if [ "$HAS_UNCOMMITTED_CHANGES" = true ]; then
-    print_status "Changes detected, proceeding with commit..."
-    
-    # Ensure Claude-specific files are in .gitignore to prevent accidental commits
-    print_status "Ensuring Claude configuration files are excluded from git tracking..."
-    
-    # Create or append to .gitignore with Claude-specific entries
-    if [ -f .gitignore ]; then
-        # Check if our entries already exist to avoid duplicates
-        if ! grep -q "^\.mcp\.json$" .gitignore; then
-            echo ".mcp.json" >> .gitignore
-            print_status "Added .mcp.json to .gitignore"
-        fi
-        if ! grep -q "^\.claude/$" .gitignore; then
-            echo ".claude/" >> .gitignore
-            print_status "Added .claude/ to .gitignore"
-        fi
-
-    else
-        # Create new .gitignore with Claude entries
-        cat > .gitignore << EOF
+# Create or append to .gitignore with Claude-specific entries
+if [ -f .gitignore ]; then
+    # Check if our entries already exist to avoid duplicates
+    if ! grep -q "^\.mcp\.json$" .gitignore; then
+        echo ".mcp.json" >> .gitignore
+        print_status "Added .mcp.json to .gitignore"
+    fi
+    if ! grep -q "^\.claude/$" .gitignore; then
+        echo ".claude/" >> .gitignore
+        print_status "Added .claude/ to .gitignore"
+    fi
+else
+    # Create new .gitignore with Claude entries
+    cat > .gitignore << EOF
 # Claude Code automation configuration files
 .mcp.json
 .claude/
 EOF
-        print_status "Created .gitignore with Claude configuration exclusions"
-    fi
-    
-    # Stage and commit changes (now both .mcp.json and .claude are safely ignored by git)
-    git add .
-    COMMIT_MSG="Claude Code automation: $(echo "$FINAL_PROMPT" | head -c 50)..."
-    git commit -m "$COMMIT_MSG"
-    print_success "Changes committed"
-else
-    print_status "No uncommitted changes to commit, proceeding with push of existing commits..."
+    print_status "Created .gitignore with Claude configuration exclusions"
 fi
-
-# Push changes
-print_status "Pushing changes to origin/$BRANCH_NAME..."
-
-# Set up remote URL with token for this specific push if needed
-REPO_URL_WITH_TOKEN="https://github-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git"
-print_status "Setting git remote URL with authentication token..."
-
-if git remote set-url origin "$REPO_URL_WITH_TOKEN"; then
-    print_success "Git remote URL updated with authentication token"
-    
-    # Verify the remote URL was set (safely, without exposing the token)
-    REMOTE_CHECK=$(git remote get-url origin)
-    if echo "$REMOTE_CHECK" | grep -q "github-token:"; then
-        print_status "Remote URL authentication verified"
-    else
-        print_warning "Remote URL may not have authentication token"
-    fi
-else
-    print_error "Failed to update git remote URL with token"
-fi
-
-print_status "Attempting to push to remote..."
-if git push origin "$BRANCH_NAME"; then
-    print_success "Changes pushed to remote"
-else
-    print_error "Failed to push changes"
-    print_status "Attempting alternative push method..."
-    
-    # Try with explicit credentials
-    if git push "https://github-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPO}.git" "$BRANCH_NAME"; then
-        print_success "Changes pushed to remote (alternative method)"
-    else
-        print_error "All push attempts failed"
-        print_status "Debug info:"
-        echo "  Repository: $GITHUB_REPO" >&2
-        echo "  Branch: $BRANCH_NAME" >&2
-        echo "  Current working directory: $(pwd)" >&2
-        echo "  Git status:" >&2
-        git status --porcelain || echo "  Could not get git status" >&2
-        exit 1
-    fi
-fi
-
-
-
-
 
 print_success "=== Claude Code Automation Completed Successfully ==="
 
@@ -936,7 +811,6 @@ print_success "=== Claude Code Automation Completed Successfully ==="
 echo >&2
 print_status "Summary:"
 echo "  Repository: $GITHUB_REPO" >&2
-echo "  Branch: $BRANCH_NAME" >&2
 echo "  Action Type: $ACTION_TYPE" >&2
 if [ "$ACTION_TYPE" = "pr" ]; then
     echo "  PR Number: $PR_NUMBER" >&2
@@ -945,7 +819,6 @@ elif [ "$ACTION_TYPE" = "issue" ]; then
 elif [ "$ACTION_TYPE" = "branch" ]; then
     echo "  Target Branch: $GITHUB_BRANCH" >&2
 fi
-echo "  Changes: Committed and pushed" >&2
 echo "  MCP Configuration: Applied from cs-cc parameters" >&2
 echo >&2
 print_success "🎉 Workflow completed successfully!"
