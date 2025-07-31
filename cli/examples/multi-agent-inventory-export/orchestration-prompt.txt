@@ -40,4 +40,33 @@ Use an iterative approach with multiple rounds of feedback and revisions to demo
 **APPROACH:**
 Coordinate with the available agents through multiple iterations to deliver a polished, working feature. Each agent brings specialized expertise - use them strategically and don't hesitate to ask for revisions or improvements. The goal is to showcase how persistent sessions enable sophisticated back-and-forth collaboration between agents.
 
+**COMPLETION REQUIREMENTS:**
+After all agents have completed their work and you've conducted the revision cycles to ensure a polished, working feature:
+
+1. **Final Quality Check** - Verify that:
+   - CSV export endpoint is working correctly
+   - Frontend UI element successfully triggers downloads
+   - Documentation is complete and accurate
+   - All code follows best practices
+   - Frontend and backend integrate seamlessly
+
+2. **Create a Pull Request** - Use GitHub tools to create a comprehensive pull request with:
+   - **Title**: Use conventional commit format like "feat: implement CSV export functionality with UI and documentation"
+   - **Description**: Include a detailed summary covering:
+     - Overview of the new CSV export feature
+     - Technical implementation details (API endpoint, UI components)
+     - Testing instructions for reviewers
+     - Links to any relevant documentation
+     - Screenshots or examples of the feature in action (if applicable)
+   - **Base branch**: main (or the default branch)
+   - **Source branch**: The current working branch created by the automation system
+
+3. **PR Documentation** - Ensure the pull request clearly shows:
+   - What files were created/modified by each agent
+   - How the feature works from a user perspective
+   - Any configuration or setup requirements
+   - Evidence that the feature has been tested
+
+The pull request should demonstrate the collaborative multi-agent workflow and provide reviewers with all necessary information to understand and test the new feature.
+
 Begin implementing this feature. 

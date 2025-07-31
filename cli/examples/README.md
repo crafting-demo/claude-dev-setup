@@ -14,7 +14,7 @@ A comprehensive example showcasing a three-agent collaborative workflow to imple
 
 This example demonstrates:
 - Multi-agent coordination using MCP tools
-- GitHub integration with automatic PR creation
+- GitHub integration with orchestrated PR creation
 - Real-time workflow streaming
 - Persistent sandbox management
 
