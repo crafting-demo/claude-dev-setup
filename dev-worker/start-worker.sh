@@ -418,6 +418,117 @@ start_local_mcp_server() {
     return 0
 }
 
+# Function to parse stream-json output from Claude
+parse_claude_stream_json() {
+    while IFS= read -r line; do
+        # Skip empty lines
+        [ -z "$line" ] && continue
+        
+        # Extract event type using jq if available, fallback to basic parsing
+        if command -v jq >/dev/null 2>&1; then
+            event_type=$(echo "$line" | jq -r '.type // "unknown"' 2>/dev/null)
+            subtype=$(echo "$line" | jq -r '.subtype // ""' 2>/dev/null)
+        else
+            # Fallback parsing without jq
+            event_type=$(echo "$line" | sed -n 's/.*"type":"\([^"]*\)".*/\1/p')
+            subtype=$(echo "$line" | sed -n 's/.*"subtype":"\([^"]*\)".*/\1/p')
+        fi
+        
+        # Route events based on type
+        case "$event_type" in
+            "system")
+                if [ "$subtype" = "init" ]; then
+                    if command -v jq >/dev/null 2>&1; then
+                        session_id=$(echo "$line" | jq -r '.session_id // "unknown"')
+                        model=$(echo "$line" | jq -r '.model // "unknown"')
+                        mcp_count=$(echo "$line" | jq -r '.mcp_servers | length // 0')
+                    else
+                        session_id="unknown"
+                        model="unknown"
+                        mcp_count="unknown"
+                    fi
+                    print_status "🔧 Claude session initialized (ID: ${session_id:0:8}..., Model: $model, MCP servers: $mcp_count)"
+                fi
+                ;;
+            "assistant")
+                # Check if this contains a tool use
+                if echo "$line" | grep -q '"tool_use"'; then
+                    if command -v jq >/dev/null 2>&1; then
+                        tool_name=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_use") | .name // "unknown"' 2>/dev/null)
+                        if [ -n "$tool_name" ] && [ "$tool_name" != "null" ] && [ "$tool_name" != "unknown" ]; then
+                            if echo "$tool_name" | grep -q "mcp__"; then
+                                print_status "[MCP-TOOL] 🔧 Calling: $tool_name"
+                            else
+                                print_status "[TOOL] 🔧 Calling: $tool_name"
+                            fi
+                        fi
+                    else
+                        if echo "$line" | grep -q "mcp__"; then
+                            print_status "[MCP-TOOL] 🔧 Tool call initiated"
+                        else
+                            print_status "[TOOL] 🔧 Tool call initiated"
+                        fi
+                    fi
+                elif echo "$line" | grep -q '"text"'; then
+                    # This is a regular text response
+                    if [ "$DEBUG_MODE" = "true" ]; then
+                        if command -v jq >/dev/null 2>&1; then
+                            text_content=$(echo "$line" | jq -r '.message.content[]? | select(.type == "text") | .text // ""' 2>/dev/null | head -c 100)
+                            if [ -n "$text_content" ]; then
+                                print_status "[CLAUDE] ${text_content}..."
+                            fi
+                        fi
+                    fi
+                fi
+                ;;
+            "user")
+                # Tool results
+                if echo "$line" | grep -q '"tool_result"'; then
+                    if [ "$DEBUG_MODE" = "true" ]; then
+                        if command -v jq >/dev/null 2>&1; then
+                            tool_id=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .tool_use_id // "unknown"' 2>/dev/null)
+                            is_error=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .is_error // false' 2>/dev/null)
+                            if [ "$is_error" = "true" ]; then
+                                print_warning "[TOOL-RESULT] ❌ Tool execution failed"
+                            else
+                                print_status "[TOOL-RESULT] ✅ Tool execution completed"
+                            fi
+                        else
+                            print_status "[TOOL-RESULT] Tool execution completed"
+                        fi
+                    fi
+                fi
+                ;;
+            "result")
+                if command -v jq >/dev/null 2>&1; then
+                    is_error=$(echo "$line" | jq -r '.is_error // false')
+                    duration_ms=$(echo "$line" | jq -r '.duration_ms // 0')
+                    num_turns=$(echo "$line" | jq -r '.num_turns // 0')
+                    total_cost=$(echo "$line" | jq -r '.total_cost_usd // 0')
+                    
+                    if [ "$is_error" = "true" ]; then
+                        print_error "Claude execution failed"
+                    else
+                        print_success "Claude execution completed (${duration_ms}ms, $num_turns turns, \$${total_cost})"
+                    fi
+                else
+                    if echo "$line" | grep -q '"is_error":false'; then
+                        print_success "Claude execution completed"
+                    else
+                        print_error "Claude execution failed"
+                    fi
+                fi
+                ;;
+            *)
+                # Unknown event type - log in debug mode only
+                if [ "$DEBUG_MODE" = "true" ]; then
+                    print_status "[DEBUG] Unknown event type: $event_type"
+                fi
+                ;;
+        esac
+    done
+}
+
 # Function to setup cleanup trap for MCP server
 setup_mcp_cleanup() {
     # Function to cleanup MCP server on exit
@@ -434,19 +545,6 @@ setup_mcp_cleanup() {
             rm -f "$HOME/cmd/mcp_server.pid"
             print_success "MCP server cleanup completed"
         fi
-        
-        # Clean up MCP log tail process if running in debug mode
-        if [ -f "$HOME/cmd/mcp_log_tail.pid" ]; then
-            local log_pid=$(cat "$HOME/cmd/mcp_log_tail.pid")
-            print_status "Cleaning up MCP log tail process (PID: $log_pid)..."
-            if kill -0 "$log_pid" 2>/dev/null; then
-                kill "$log_pid" 2>/dev/null || true
-                sleep 1
-                kill -9 "$log_pid" 2>/dev/null || true
-            fi
-            rm -f "$HOME/cmd/mcp_log_tail.pid"
-            print_success "MCP log tail process cleanup completed"
-        fi
     }
     
     # Set trap to cleanup on script exit
@@ -456,35 +554,17 @@ setup_mcp_cleanup() {
 # Execute MCP server management
 setup_mcp_cleanup
 
-# Debug mode status and MCP log tailing setup
+# Stream-JSON logging setup
 if [ "$DEBUG_MODE" = "true" ]; then
-    print_status "🐛 DEBUG MODE ENABLED - MCP tool calls will be visible in real-time"
-    
-    # Set up MCP log file tailing (server will create log when Claude starts it)
-    MCP_DEBUG_LOG="$HOME/cmd/mcp-server-debug.log"
-    print_status "🔧 Setting up MCP debug log monitoring at: $MCP_DEBUG_LOG"
-    
-    # Create empty log file and start tailing in background
-    touch "$MCP_DEBUG_LOG"
-    print_status "📋 Starting MCP log tail - tool calls will appear with [MCP-LOG] prefix"
-    
-    # Start tailing the debug log that MCP server will write to
-    (tail -f "$MCP_DEBUG_LOG" | while IFS= read -r line; do 
-        echo "[MCP-LOG] $line"
-    done) &
-    MCP_LOG_PID=$!
-    echo $MCP_LOG_PID > "$HOME/cmd/mcp_log_tail.pid"
-    
-    print_status "✅ MCP debug log monitoring active (PID: $MCP_LOG_PID)"
-    print_status "   Look for: [MCP-LOG] [LOCAL-MCP] 🔧 TOOL CALL INITIATED messages"
+    print_status "🐛 DEBUG MODE ENABLED - Real-time Claude event streaming with enhanced MCP visibility"
+    print_status "   Tool calls, MCP interactions, and performance metrics will be shown in real-time"
 else
-    print_status "📋 Normal mode - MCP tool calls will be logged to $HOME/cmd/mcp-server-debug.log"
+    print_status "📋 Normal mode - Claude events will be processed with stream-json for better reliability"
 fi
 
-# Don't start MCP server manually - let Claude start it on-demand
-# The server will now log to file regardless of how it's started
+# MCP server will be started on-demand by Claude Code
 print_status "🔧 MCP server will be started on-demand by Claude Code"
-print_status "   All tool calls will be captured in debug log file"
+print_status "   All tool calls and interactions will be captured via stream-json events"
 
 # Verify MCP configuration is ready
 print_status "Verifying MCP configuration readiness..."
@@ -730,34 +810,18 @@ else
     exit 1
 fi
 
-# Run Claude Code
-if [ "$DEBUG_MODE" = "true" ]; then
-    # Debug mode: run Claude in background so MCP logs can interleave in real-time
-    print_status "Debug mode: Running Claude Code with real-time MCP log streaming..."
-    claude --mcp-config .mcp.json -p "$FINAL_PROMPT" --verbose &
-    CLAUDE_PID=$!
-    
-    # Wait for Claude to complete while allowing MCP logs to stream
-    if wait $CLAUDE_PID; then
-        print_success "Claude Code execution completed"
-    else
-        print_error "Claude Code execution failed"
-        echo "Available commands in PATH:"
-        which claude 2>/dev/null || echo "claude command not found"
-        exit 1
-    fi
-else
-    # Normal mode: synchronous execution
-    if claude --mcp-config .mcp.json -p "$FINAL_PROMPT" --verbose; then
-        print_success "Claude Code execution completed"
-        
+# Run Claude Code with stream-json output
+print_status "Executing Claude Code with stream-json for real-time event monitoring..."
 
-    else
-        print_error "Claude Code execution failed"
-        echo "Available commands in PATH:"
-        which claude 2>/dev/null || echo "claude command not found"
-        exit 1
-    fi
+# Use stream-json format for structured output and real-time event processing
+if claude --mcp-config .mcp.json -p "$FINAL_PROMPT" --output-format stream-json --verbose | parse_claude_stream_json; then
+    print_success "Claude Code execution pipeline completed successfully"
+else
+    exit_code=$?
+    print_error "Claude Code execution failed with exit code: $exit_code"
+    echo "Available commands in PATH:"
+    which claude 2>/dev/null || echo "claude command not found"
+    exit 1
 fi
 
 # Check if there are any changes (including untracked files, excluding .claude directory)
