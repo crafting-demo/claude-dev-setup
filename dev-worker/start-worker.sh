@@ -470,32 +470,64 @@ parse_claude_stream_json() {
                         fi
                     fi
                 elif echo "$line" | grep -q '"text"'; then
-                    # This is a regular text response
-                    if [ "$DEBUG_MODE" = "true" ]; then
-                        if command -v jq >/dev/null 2>&1; then
-                            text_content=$(echo "$line" | jq -r '.message.content[]? | select(.type == "text") | .text // ""' 2>/dev/null | head -c 100)
-                            if [ -n "$text_content" ]; then
-                                print_status "[CLAUDE] ${text_content}..."
+                    # This is a regular text response - show meaningful content
+                    if command -v jq >/dev/null 2>&1; then
+                        text_content=$(echo "$line" | jq -r '.message.content[]? | select(.type == "text") | .text // ""' 2>/dev/null)
+                        if [ -n "$text_content" ] && [ "$text_content" != "null" ]; then
+                            # In debug mode, show more content; in normal mode, show reasonable preview
+                            if [ "$DEBUG_MODE" = "true" ]; then
+                                # Debug mode: show more content with length indicator
+                                if [ ${#text_content} -gt 500 ]; then
+                                    print_status "[CLAUDE] ${text_content:0:500}... (${#text_content} chars total)"
+                                else
+                                    print_status "[CLAUDE] $text_content"
+                                fi
+                            else
+                                # Normal mode: show reasonable preview to avoid log spam
+                                if [ ${#text_content} -gt 150 ]; then
+                                    print_status "[CLAUDE] ${text_content:0:150}..."
+                                else
+                                    print_status "[CLAUDE] $text_content"
+                                fi
                             fi
                         fi
                     fi
                 fi
                 ;;
             "user")
-                # Tool results
+                # Tool results - show actual content returned by tools
                 if echo "$line" | grep -q '"tool_result"'; then
-                    if [ "$DEBUG_MODE" = "true" ]; then
-                        if command -v jq >/dev/null 2>&1; then
-                            tool_id=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .tool_use_id // "unknown"' 2>/dev/null)
-                            is_error=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .is_error // false' 2>/dev/null)
-                            if [ "$is_error" = "true" ]; then
-                                print_warning "[TOOL-RESULT] ❌ Tool execution failed"
-                            else
-                                print_status "[TOOL-RESULT] ✅ Tool execution completed"
-                            fi
+                    if command -v jq >/dev/null 2>&1; then
+                        tool_id=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .tool_use_id // "unknown"' 2>/dev/null)
+                        is_error=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .is_error // false' 2>/dev/null)
+                        result_content=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .content // ""' 2>/dev/null)
+                        
+                        if [ "$is_error" = "true" ]; then
+                            error_msg=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .error // "Unknown error"' 2>/dev/null)
+                            print_warning "[TOOL-RESULT] ❌ Tool execution failed: $error_msg"
                         else
-                            print_status "[TOOL-RESULT] Tool execution completed"
+                            print_status "[TOOL-RESULT] ✅ Tool execution completed"
+                            # Show tool result content if not empty
+                            if [ -n "$result_content" ] && [ "$result_content" != "null" ] && [ "$result_content" != "" ]; then
+                                if [ "$DEBUG_MODE" = "true" ]; then
+                                    # Debug mode: show more detailed output
+                                    if [ ${#result_content} -gt 500 ]; then
+                                        print_status "[TOOL-OUTPUT] ${result_content:0:500}... (${#result_content} chars total)"
+                                    else
+                                        print_status "[TOOL-OUTPUT] $result_content"
+                                    fi
+                                else
+                                    # Normal mode: show brief output or just indicate content
+                                    if [ ${#result_content} -gt 200 ]; then
+                                        print_status "[TOOL-OUTPUT] ${result_content:0:200}... (${#result_content} chars)"
+                                    else
+                                        print_status "[TOOL-OUTPUT] $result_content"
+                                    fi
+                                fi
+                            fi
                         fi
+                    else
+                        print_status "[TOOL-RESULT] Tool execution completed"
                     fi
                 fi
                 ;;
