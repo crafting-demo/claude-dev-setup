@@ -35,15 +35,12 @@ Once you have successfully enhanced the README with emojis and visual improvemen
    git commit -m "docs: enhance README with emojis and improved formatting"
    ```
 
-3. **Push the branch** - Push your new branch to the remote repository:
-   ```bash
-   git push origin <branch-name>
-   ```
-
-4. **Create a Pull Request** - Use the `gh` tool to create a pull request:
+3. **Create Pull Request with Automatic Push** - Use `gh` to handle both pushing and PR creation:
    ```bash
    gh pr create --title "✅ docs: enhance README with emojis and improved formatting" --body "Enhanced README.md with appropriate emojis and improved formatting for better readability and visual appeal." --base main
    ```
+   
+   **Important**: GitHub CLI will automatically push the branch and create the PR without any user interaction.
 
 **IMPORTANT**: The PR title MUST start with the ✅ emoji as the first character.
 

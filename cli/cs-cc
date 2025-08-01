@@ -417,6 +417,9 @@ async function createSandbox(args) {
     // Add Anthropic API key
     envVars.push(`-D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`);
     
+    // Disable all GitHub CLI interactive prompts
+    envVars.push(`-D 'claude/env[GH_PROMPT_DISABLED]=1'`);
+    
     if (envVars.length > 0) {
       cmd += ' \\\n  ' + envVars.join(' \\\n  ');
     }

@@ -209,6 +209,19 @@ else
     exit 1
 fi
 
+# Configure git to use GitHub CLI credentials for push operations
+print_status "Configuring git to use GitHub CLI credentials..."
+set +e  # Temporarily disable exit on error
+gh auth setup-git
+setup_git_result=$?
+set -e  # Re-enable exit on error
+
+if [ $setup_git_result -eq 0 ]; then
+    print_success "Git configured to use GitHub CLI credentials for push operations"
+else
+    print_warning "Failed to configure git credentials (exit code: $setup_git_result), git push operations may fail"
+fi
+
 # Check for required tools
 print_status "Checking required tools..."
 
