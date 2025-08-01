@@ -396,6 +396,9 @@ start_local_mcp_server() {
 
 # Function to parse stream-json output from Claude
 parse_claude_stream_json() {
+    # Associative array to store tool call details for correlation (bash 4.0+)
+    declare -A tool_calls
+    
     while IFS= read -r line; do
         # Skip empty lines
         [ -z "$line" ] && continue
@@ -431,12 +434,54 @@ parse_claude_stream_json() {
                 if echo "$line" | grep -q '"tool_use"'; then
                     if command -v jq >/dev/null 2>&1; then
                         tool_name=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_use") | .name // "unknown"' 2>/dev/null)
+                        tool_id=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_use") | .id // "unknown"' 2>/dev/null)
+                        tool_input=$(echo "$line" | jq -c '.message.content[]? | select(.type == "tool_use") | .input // {}' 2>/dev/null)
+                        
                         if [ -n "$tool_name" ] && [ "$tool_name" != "null" ] && [ "$tool_name" != "unknown" ]; then
+                            # Store tool call details for correlation with results
+                            tool_calls["$tool_id"]="$tool_name"
+                            
+                            # Format tool call message with input details
                             if echo "$tool_name" | grep -q "mcp__"; then
-                                print_status "[MCP-TOOL] 🔧 Calling: $tool_name"
+                                tool_prefix="[MCP-TOOL]"
                             else
-                                print_status "[TOOL] 🔧 Calling: $tool_name"
+                                tool_prefix="[TOOL]"
                             fi
+                            
+                            # Special handling for common tools to show relevant parameters
+                            case "$tool_name" in
+                                "Bash")
+                                    # Extract command from Bash tool input
+                                    bash_command=$(echo "$tool_input" | jq -r '.command // ""' 2>/dev/null)
+                                    if [ -n "$bash_command" ] && [ "$bash_command" != "null" ] && [ "$bash_command" != "" ]; then
+                                        print_status "$tool_prefix 🔧 Calling Bash: $bash_command"
+                                    else
+                                        print_status "$tool_prefix 🔧 Calling: $tool_name"
+                                    fi
+                                    ;;
+                                "Read"|"Write"|"Edit"|"MultiEdit")
+                                    # Extract file_path for file operations
+                                    file_path=$(echo "$tool_input" | jq -r '.file_path // ""' 2>/dev/null)
+                                    if [ -n "$file_path" ] && [ "$file_path" != "null" ] && [ "$file_path" != "" ]; then
+                                        print_status "$tool_prefix 🔧 Calling $tool_name: $file_path"
+                                    else
+                                        print_status "$tool_prefix 🔧 Calling: $tool_name"
+                                    fi
+                                    ;;
+                                *)
+                                    # For other tools, show tool name and condensed input if available
+                                    if [ "$tool_input" != "{}" ] && [ -n "$tool_input" ]; then
+                                        # Show first key-value pair or truncated input in debug mode
+                                        if [ "$DEBUG_MODE" = "true" ]; then
+                                            print_status "$tool_prefix 🔧 Calling $tool_name with: $tool_input"
+                                        else
+                                            print_status "$tool_prefix 🔧 Calling: $tool_name"
+                                        fi
+                                    else
+                                        print_status "$tool_prefix 🔧 Calling: $tool_name"
+                                    fi
+                                    ;;
+                            esac
                         fi
                     else
                         if echo "$line" | grep -q "mcp__"; then
@@ -476,13 +521,36 @@ parse_claude_stream_json() {
                     if command -v jq >/dev/null 2>&1; then
                         tool_id=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .tool_use_id // "unknown"' 2>/dev/null)
                         is_error=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .is_error // false' 2>/dev/null)
-                        result_content=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .content // ""' 2>/dev/null)
+                        
+                        # Get the tool name from our stored correlation
+                        tool_name="${tool_calls[$tool_id]:-unknown}"
+                        
+                        # Extract result content properly - it's an array of content objects
+                        result_content=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .content[]? | .text // ""' 2>/dev/null)
                         
                         if [ "$is_error" = "true" ]; then
-                            error_msg=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .error // "Unknown error"' 2>/dev/null)
-                            print_warning "[TOOL-RESULT] ❌ Tool execution failed: $error_msg"
+                            # Extract detailed error information
+                            error_msg=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .error // ""' 2>/dev/null)
+                            
+                            # If no error field, try to extract from content
+                            if [ -z "$error_msg" ] || [ "$error_msg" = "null" ] || [ "$error_msg" = "" ]; then
+                                error_msg=$(echo "$line" | jq -r '.message.content[]? | select(.type == "tool_result") | .content[]? | .text // "Unknown error"' 2>/dev/null)
+                            fi
+                            
+                            # Show correlated tool failure with actual error
+                            if [ "$tool_name" != "unknown" ]; then
+                                print_warning "[TOOL-RESULT] ❌ $tool_name failed: $error_msg"
+                            else
+                                print_warning "[TOOL-RESULT] ❌ Tool execution failed: $error_msg"
+                            fi
                         else
-                            print_status "[TOOL-RESULT] ✅ Tool execution completed"
+                            # Tool succeeded
+                            if [ "$tool_name" != "unknown" ]; then
+                                print_status "[TOOL-RESULT] ✅ $tool_name completed"
+                            else
+                                print_status "[TOOL-RESULT] ✅ Tool execution completed"
+                            fi
+                            
                             # Show tool result content if not empty
                             if [ -n "$result_content" ] && [ "$result_content" != "null" ] && [ "$result_content" != "" ]; then
                                 if [ "$DEBUG_MODE" = "true" ]; then

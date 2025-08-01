@@ -60,8 +60,8 @@ The workflow involves three specialized agents that use **dynamic inputs** to bu
    - A persistent sandbox is created for inspection
 
 4. **Check the results:**
-   - Visit the GitHub repository to see the created pull request
-   - The PR will contain the implemented feature, tests, and documentation
+   - Visit the GitHub repository to see the created pull request (title will start with ✅ emoji)
+   - The PR will contain the implemented feature, tests, and documentation on a new feature branch
 
 ## What Happens
 
@@ -70,7 +70,8 @@ The workflow involves three specialized agents that use **dynamic inputs** to bu
 3. **Implementation** - Software engineer receives detailed task description and implements feature
 4. **Testing** - QA analyst receives implementation details and writes matching tests
 5. **Documentation** - Technical writer receives feature summary and creates comprehensive docs
-6. **GitHub Integration** - Changes are committed and a PR is created
+6. **Git Workflow** - Creates new branch, commits all changes, pushes to remote
+7. **GitHub Integration** - Uses `gh` CLI tool to create PR with ✅ emoji-prefixed title
 
 ### Dynamic Input Flow
 
@@ -123,6 +124,7 @@ The sandbox name is displayed in the script output.
 
 On success, you should see:
 - Real-time streaming of agent activities
-- A new pull request in the target repository
+- Complete Git workflow execution (branch creation, commits, push)
+- A new pull request in the target repository with ✅ emoji-prefixed title
 - Implemented CSV export feature with tests and documentation
 - Success message with sandbox and cleanup instructions 

@@ -4,19 +4,28 @@ This directory contains practical examples demonstrating how to use the `cs-cc` 
 
 ## Available Examples
 
-### Multi-Agent Inventory Export (`multi-agent-inventory-export/`)
+### 🚀 Multi-Agent Inventory Export (`multi-agent-inventory-export/`)
 
 A comprehensive example showcasing a three-agent collaborative workflow to implement a CSV export feature:
 
-- **Software Engineer** - Implements the feature
-- **QA Analyst** - Writes tests 
-- **Documentation Writer** - Updates documentation
+- **front_end_engineer** - UI components and user experience
+- **back_end_engineer** - API endpoints and data processing  
+- **documentation_writer** - Feature documentation and user guides
 
-This example demonstrates:
-- Multi-agent coordination using MCP tools
-- GitHub integration with orchestrated PR creation
+### 📝 Emoji README Enhancement (`emoji-readme-example/`)
+
+A simple single-agent example demonstrating README enhancement with emojis and visual improvements:
+
+- **emoji_enhancer** - Specializes in adding emojis and visual improvements to documentation
+
+## Common Features
+
+Both examples demonstrate:
+- Complete Git workflow with branch creation, commits, and automated PR creation
+- GitHub integration using the `gh` CLI tool with ✅ emoji-prefixed PR titles
 - Real-time workflow streaming
 - Persistent sandbox management
+- MCP tool integration for specialized capabilities
 
 **Quick Start:**
 ```bash
