@@ -12,6 +12,16 @@ A comprehensive example showcasing a three-agent collaborative workflow to imple
 - **back_end_engineer** - API endpoints and data processing  
 - **documentation_writer** - Feature documentation and user guides
 
+### 🔐 Secure Authentication Pipeline (`secure-auth-pipeline/`)
+
+A sophisticated example demonstrating **sequential subagent orchestration** where agents build upon each other's work:
+
+- **software_engineer** - Implements JWT authentication system with APIs and client integration
+- **security_analyst** - Reviews implementation, applies security hardening and OWASP compliance
+- **documentation_writer** - Creates comprehensive security documentation and developer guides
+
+This example showcases how agents can work in sequence with clear dependencies, context inheritance, and iterative refinement cycles to produce production-ready, secure code.
+
 ### 📝 Emoji README Enhancement (`emoji-readme-example/`)
 
 A simple single-agent example demonstrating README enhancement with emojis and visual improvements:
@@ -20,7 +30,7 @@ A simple single-agent example demonstrating README enhancement with emojis and v
 
 ## Common Features
 
-Both examples demonstrate:
+All examples demonstrate:
 - Complete Git workflow with branch creation, commits, and automated PR creation
 - GitHub integration using the `gh` CLI tool with ✅ emoji-prefixed PR titles
 - Real-time workflow streaming
@@ -29,7 +39,14 @@ Both examples demonstrate:
 
 **Quick Start:**
 ```bash
+# Multi-agent collaborative workflow
 cd multi-agent-inventory-export
+export GITHUB_TOKEN="your_token"
+export ANTHROPIC_API_KEY="your_anthropic_api_key"
+./run-example.sh
+
+# Sequential subagent orchestration
+cd secure-auth-pipeline
 export GITHUB_TOKEN="your_token"
 export ANTHROPIC_API_KEY="your_anthropic_api_key"
 ./run-example.sh
@@ -74,7 +91,12 @@ When creating new examples:
 
 3. **Choose an example and run it**:
    ```bash
+   # For multi-agent collaborative workflow:
    cd multi-agent-inventory-export
+   ./run-example.sh
+   
+   # For sequential subagent orchestration:
+   cd secure-auth-pipeline
    ./run-example.sh
    ```
 

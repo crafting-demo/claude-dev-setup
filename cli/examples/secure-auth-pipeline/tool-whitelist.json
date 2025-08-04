@@ -1,0 +1,12 @@
+[
+  "local_server___software_engineer", 
+  "local_server___security_analyst", 
+  "local_server___documentation_writer",
+  "read_file",
+  "search_replace", 
+  "write",
+  "list_dir",
+  "grep_search",
+  "run_terminal_cmd",
+  "todo_write"
+]

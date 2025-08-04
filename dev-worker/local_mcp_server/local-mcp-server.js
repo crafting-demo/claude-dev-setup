@@ -7,7 +7,7 @@ import {
   CallToolRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, existsSync, appendFileSync, writeFileSync } from "fs";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 import os from "os";
 import path from "path";
 
@@ -202,6 +202,186 @@ class LocalMCPServer {
            prompt.includes('\\');
   }
 
+  // Execute Claude command with streaming JSON output and parse events in real-time
+  async executeStreamingClaude(claudeCommand, toolName) {
+    return new Promise((resolve, reject) => {
+      let result = '';
+      let errorOutput = '';
+      
+      mcpLog(`Executing streaming command for ${toolName}`);
+      
+      // Parse the command to extract binary and arguments
+      const [command, ...args] = claudeCommand.split(' ');
+      
+      // Handle stdin piping for complex prompts
+      if (claudeCommand.includes('printf') && claudeCommand.includes('|')) {
+        // For stdin piping, we need to use shell execution
+        const child = spawn('sh', ['-c', claudeCommand], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        child.stdout.on('data', (data) => {
+          const lines = data.toString().split('\n');
+          lines.forEach(line => {
+            if (line.trim()) {
+              this.parseSubagentStreamEvent(line.trim(), toolName);
+              result += line + '\n';
+            }
+          });
+        });
+        
+        child.stderr.on('data', (data) => {
+          errorOutput += data.toString();
+          mcpLog(`[${toolName}] STDERR: ${data.toString().trim()}`);
+        });
+        
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve(result.trim());
+          } else {
+            reject(new Error(`Command failed with exit code ${code}: ${errorOutput}`));
+          }
+        });
+        
+        child.on('error', (error) => {
+          reject(error);
+        });
+      } else {
+        // For direct argument passing
+        const child = spawn(command, args, {
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        child.stdout.on('data', (data) => {
+          const lines = data.toString().split('\n');
+          lines.forEach(line => {
+            if (line.trim()) {
+              this.parseSubagentStreamEvent(line.trim(), toolName);
+              result += line + '\n';
+            }
+          });
+        });
+        
+        child.stderr.on('data', (data) => {
+          errorOutput += data.toString();
+          mcpLog(`[${toolName}] STDERR: ${data.toString().trim()}`);
+        });
+        
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve(result.trim());
+          } else {
+            reject(new Error(`Command failed with exit code ${code}: ${errorOutput}`));
+          }
+        });
+        
+        child.on('error', (error) => {
+          reject(error);
+        });
+      }
+    });
+  }
+
+  // Parse stream-json events from subagent Claude calls
+  parseSubagentStreamEvent(line, toolName) {
+    try {
+      // Skip empty lines
+      if (!line.trim()) return;
+      
+      // Try to parse as JSON
+      const event = JSON.parse(line);
+      const eventType = event.type || 'unknown';
+      const subtype = event.subtype || '';
+      
+      // Add subagent prefix to distinguish from main agent events
+      const prefix = `[SUBAGENT-${toolName.toUpperCase()}]`;
+      
+      // Route events based on type (similar to main agent but with prefix)
+      switch (eventType) {
+        case 'system':
+          if (subtype === 'init') {
+            const sessionId = event.session_id || 'unknown';
+            const model = event.model || 'unknown';
+            const mcpCount = event.mcp_servers ? event.mcp_servers.length : 0;
+            mcpLog(`${prefix} 🔧 Session initialized (ID: ${sessionId.substring(0, 8)}..., Model: ${model}, MCP: ${mcpCount})`);
+          }
+          break;
+          
+        case 'assistant':
+          // Check if this contains a tool use
+          if (line.includes('"tool_use"')) {
+            try {
+              const toolUse = event.message?.content?.find(c => c.type === 'tool_use');
+              if (toolUse) {
+                const subToolName = toolUse.name || 'unknown';
+                if (subToolName.includes('mcp__')) {
+                  mcpLog(`${prefix} 🔧 Calling MCP tool: ${subToolName}`);
+                } else {
+                  mcpLog(`${prefix} 🔧 Calling tool: ${subToolName}`);
+                }
+              }
+            } catch (parseError) {
+              mcpLog(`${prefix} 🔧 Tool call initiated`);
+            }
+          } else if (line.includes('"text"')) {
+            // Show meaningful text responses from subagent
+            try {
+              const textContent = event.message?.content?.find(c => c.type === 'text')?.text;
+              if (textContent && textContent.length > 0) {
+                // Show preview of subagent's reasoning/response
+                const preview = textContent.length > 100 ? 
+                  `${textContent.substring(0, 100)}...` : textContent;
+                mcpLog(`${prefix} 💭 ${preview}`);
+              }
+            } catch (parseError) {
+              mcpLog(`${prefix} 💭 Generating response...`);
+            }
+          }
+          break;
+          
+        case 'user':
+          // Tool results from subagent
+          if (line.includes('"tool_result"')) {
+            try {
+              const toolResult = event.message?.content?.find(c => c.type === 'tool_result');
+              if (toolResult) {
+                const isError = toolResult.is_error || false;
+                if (isError) {
+                  const errorMsg = toolResult.error || 'Unknown error';
+                  mcpLog(`${prefix} ❌ Tool failed: ${errorMsg}`);
+                } else {
+                  mcpLog(`${prefix} ✅ Tool completed`);
+                }
+              }
+            } catch (parseError) {
+              mcpLog(`${prefix} ✅ Tool execution completed`);
+            }
+          }
+          break;
+          
+        case 'result':
+          const isError = event.is_error || false;
+          const duration = event.duration_ms || 0;
+          const turns = event.num_turns || 0;
+          const cost = event.total_cost_usd || 0;
+          
+          if (isError) {
+            mcpLog(`${prefix} ❌ Execution failed`);
+          } else {
+            mcpLog(`${prefix} ✅ Completed (${duration}ms, ${turns} turns, $${cost})`);
+          }
+          break;
+          
+        default:
+          // Skip unknown events to avoid noise
+          break;
+      }
+    } catch (parseError) {
+      // Skip non-JSON lines (might be plain text output)
+      // Don't log parse errors as they're expected for mixed output
+    }
+  }
+
   loadToolDefinitions() {
     const configPath = path.join(os.homedir(), "cmd", "local_mcp_tools.txt");
     
@@ -351,13 +531,13 @@ class LocalMCPServer {
         }
         
         // Create command with proper prompt handling
-        const baseCommand = `claude --resume ${previousSession.sessionId}`;
+        const baseCommand = `claude --resume ${previousSession.sessionId} --output-format stream-json --verbose`;
         claudeCommand = this.createPromptCommand(prompt, baseCommand);
         usingPreviousSession = true;
         // Resuming session
       } else {
         // Start new session 
-        const baseCommand = `claude`;
+        const baseCommand = `claude --output-format stream-json --verbose`;
         claudeCommand = this.createPromptCommand(prompt, baseCommand);
         this.sessions.set(tool.name, Date.now());
         // Starting new session
@@ -397,12 +577,12 @@ class LocalMCPServer {
         }
         
         // Create command with proper prompt handling
-        const baseCommand = `claude --resume ${previousSession.sessionId}`;
+        const baseCommand = `claude --resume ${previousSession.sessionId} --output-format stream-json --verbose`;
         claudeCommand = this.createPromptCommand(prompt, baseCommand);
         usingPreviousSession = true;
         // Resuming session
       } else {
-        const baseCommand = `claude`;
+        const baseCommand = `claude --output-format stream-json --verbose`;
         claudeCommand = this.createPromptCommand(prompt, baseCommand);
         this.sessions.set(tool.name, Date.now());
         // Starting new session
@@ -410,16 +590,12 @@ class LocalMCPServer {
     }
 
     try {
-      // Executing Claude command
-      const result = execSync(claudeCommand, {
-        encoding: "utf-8",
-        timeout: 900000, // 15 minute timeout (increased from 5 minutes)
-        maxBuffer: 1024 * 1024 * 10 // 10MB buffer
-      });
+      // Execute Claude command with streaming JSON output for real-time visibility
+      const result = await this.executeStreamingClaude(claudeCommand, tool.name);
       
       // Save the session after successful execution (only if we're not using a previous session)
       if (!usingPreviousSession) {
-                  // Saving new session
+        // Saving new session
         this.saveToolSession(tool.name);
       } else {
         // Updated existing session
@@ -431,8 +607,8 @@ class LocalMCPServer {
         }
       }
       
-              // Tool completion now tracked via stream-json
-        mcpLog(`Tool completed: ${tool.name}`);
+      // Tool completion now tracked via stream-json with subagent prefix
+      mcpLog(`Tool completed: ${tool.name}`);
       
       return result.trim();
       
