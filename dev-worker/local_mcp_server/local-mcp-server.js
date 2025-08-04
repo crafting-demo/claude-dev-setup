@@ -11,18 +11,24 @@ import { execSync, spawn } from "child_process";
 import os from "os";
 import path from "path";
 
-// Simplified logging - stream-json now handles detailed tool call visibility
+// Enhanced logging that writes to both console and file
+const LOG_FILE = path.join(os.homedir(), "cmd", "mcp-server-debug.log");
 const SESSION_STATE_FILE = path.join(os.homedir(), "cmd", "session-state.json");
 
 function mcpLog(message, level = 'info') {
-  // Only log essential messages since stream-json captures detailed tool interactions
+  const timestamp = new Date().toISOString();
   const prefixedMessage = `[LOCAL-MCP] ${message}`;
+  const logLine = `${timestamp} ${prefixedMessage}`;
   
-  // Log to console (captured by Claude's stream-json output)
-  if (level === 'error' || level === 'startup' || level === 'warn') {
-    console.log(prefixedMessage);
+  // Always log to console (for Claude Code)
+  console.log(prefixedMessage);
+  
+  // Also log to file (for start-worker.sh tailing)
+  try {
+    appendFileSync(LOG_FILE, logLine + '\n');
+  } catch (error) {
+    // Silently fail if we can't write to log file
   }
-  // Skip verbose logs - stream-json provides better visibility
 }
 
 class LocalMCPServer {
@@ -205,8 +211,10 @@ class LocalMCPServer {
   // Execute Claude command with streaming JSON output and parse events in real-time
   async executeStreamingClaude(claudeCommand, toolName) {
     return new Promise((resolve, reject) => {
-      let result = '';
+      let finalResult = '';
       let errorOutput = '';
+      let lastTextMessage = '';
+      let streamingEvents = []; // Accumulate streaming events for final result
       
       mcpLog(`Executing streaming command for ${toolName}`);
       
@@ -224,8 +232,18 @@ class LocalMCPServer {
           const lines = data.toString().split('\n');
           lines.forEach(line => {
             if (line.trim()) {
-              this.parseSubagentStreamEvent(line.trim(), toolName);
-              result += line + '\n';
+              // Parse and capture the streaming event
+              const eventResult = this.parseSubagentStreamEvent(line.trim(), toolName);
+              
+              // If we got a formatted event message, add it to our accumulator
+              if (eventResult && eventResult.message) {
+                streamingEvents.push(eventResult.message);
+              }
+              
+              // Keep track of the last meaningful text response for the final result
+              if (eventResult && eventResult.textContent) {
+                lastTextMessage = eventResult.textContent;
+              }
             }
           });
         });
@@ -237,7 +255,14 @@ class LocalMCPServer {
         
         child.on('close', (code) => {
           if (code === 0) {
-            resolve(result.trim());
+            // Include streaming events in the final result
+            let result = '';
+            if (streamingEvents.length > 0) {
+              result += '🔄 **Subagent Execution Log:**\n\n';
+              result += streamingEvents.join('\n') + '\n\n';
+            }
+            result += lastTextMessage || 'Task completed successfully';
+            resolve(result);
           } else {
             reject(new Error(`Command failed with exit code ${code}: ${errorOutput}`));
           }
@@ -256,8 +281,18 @@ class LocalMCPServer {
           const lines = data.toString().split('\n');
           lines.forEach(line => {
             if (line.trim()) {
-              this.parseSubagentStreamEvent(line.trim(), toolName);
-              result += line + '\n';
+              // Parse and capture the streaming event
+              const eventResult = this.parseSubagentStreamEvent(line.trim(), toolName);
+              
+              // If we got a formatted event message, add it to our accumulator
+              if (eventResult && eventResult.message) {
+                streamingEvents.push(eventResult.message);
+              }
+              
+              // Keep track of the last meaningful text response for the final result
+              if (eventResult && eventResult.textContent) {
+                lastTextMessage = eventResult.textContent;
+              }
             }
           });
         });
@@ -269,7 +304,14 @@ class LocalMCPServer {
         
         child.on('close', (code) => {
           if (code === 0) {
-            resolve(result.trim());
+            // Include streaming events in the final result
+            let result = '';
+            if (streamingEvents.length > 0) {
+              result += '🔄 **Subagent Execution Log:**\n\n';
+              result += streamingEvents.join('\n') + '\n\n';
+            }
+            result += lastTextMessage || 'Task completed successfully';
+            resolve(result);
           } else {
             reject(new Error(`Command failed with exit code ${code}: ${errorOutput}`));
           }
@@ -282,11 +324,11 @@ class LocalMCPServer {
     });
   }
 
-  // Parse stream-json events from subagent Claude calls
+  // Parse stream-json events from subagent Claude calls and return formatted messages
   parseSubagentStreamEvent(line, toolName) {
     try {
       // Skip empty lines
-      if (!line.trim()) return;
+      if (!line.trim()) return null;
       
       // Try to parse as JSON
       const event = JSON.parse(line);
@@ -296,14 +338,19 @@ class LocalMCPServer {
       // Add subagent prefix to distinguish from main agent events
       const prefix = `[SUBAGENT-${toolName.toUpperCase()}]`;
       
-      // Route events based on type (similar to main agent but with prefix)
+      // Route events based on type and format messages for accumulation
       switch (eventType) {
         case 'system':
           if (subtype === 'init') {
             const sessionId = event.session_id || 'unknown';
             const model = event.model || 'unknown';
             const mcpCount = event.mcp_servers ? event.mcp_servers.length : 0;
-            mcpLog(`${prefix} 🔧 Session initialized (ID: ${sessionId.substring(0, 8)}..., Model: ${model}, MCP: ${mcpCount})`);
+            const logMessage = `${prefix} 🔧 Session initialized (ID: ${sessionId.substring(0, 8)}..., Model: ${model}, MCP: ${mcpCount})`;
+            mcpLog(logMessage);
+            return {
+              message: logMessage,
+              textContent: null
+            };
           }
           break;
           
@@ -315,13 +362,26 @@ class LocalMCPServer {
               if (toolUse) {
                 const subToolName = toolUse.name || 'unknown';
                 if (subToolName.includes('mcp__')) {
-                  mcpLog(`${prefix} 🔧 Calling MCP tool: ${subToolName}`);
+                  const logMessage = `${prefix} 🔧 Calling MCP tool: ${subToolName}`;
+                  mcpLog(logMessage);
+                  return {
+                    message: logMessage,
+                    textContent: null
+                  };
                 } else {
-                  mcpLog(`${prefix} 🔧 Calling tool: ${subToolName}`);
+                  const logMessage = `${prefix} 🔧 Calling tool: ${subToolName}`;
+                  mcpLog(logMessage);
+                  return {
+                    message: logMessage,
+                    textContent: null
+                  };
                 }
               }
             } catch (parseError) {
-              mcpLog(`${prefix} 🔧 Tool call initiated`);
+              return {
+                message: `${prefix} 🔧 Tool call initiated`,
+                textContent: null
+              };
             }
           } else if (line.includes('"text"')) {
             // Show meaningful text responses from subagent
@@ -331,10 +391,18 @@ class LocalMCPServer {
                 // Show preview of subagent's reasoning/response
                 const preview = textContent.length > 100 ? 
                   `${textContent.substring(0, 100)}...` : textContent;
-                mcpLog(`${prefix} 💭 ${preview}`);
+                const logMessage = `${prefix} 💭 ${preview}`;
+                mcpLog(logMessage);
+                return {
+                  message: logMessage,
+                  textContent: textContent
+                };
               }
             } catch (parseError) {
-              mcpLog(`${prefix} 💭 Generating response...`);
+              return {
+                message: `${prefix} 💭 Generating response...`,
+                textContent: null
+              };
             }
           }
           break;
@@ -348,13 +416,26 @@ class LocalMCPServer {
                 const isError = toolResult.is_error || false;
                 if (isError) {
                   const errorMsg = toolResult.error || 'Unknown error';
-                  mcpLog(`${prefix} ❌ Tool failed: ${errorMsg}`);
+                  const logMessage = `${prefix} ❌ Tool failed: ${errorMsg}`;
+                  mcpLog(logMessage);
+                  return {
+                    message: logMessage,
+                    textContent: null
+                  };
                 } else {
-                  mcpLog(`${prefix} ✅ Tool completed`);
+                  const logMessage = `${prefix} ✅ Tool completed`;
+                  mcpLog(logMessage);
+                  return {
+                    message: logMessage,
+                    textContent: null
+                  };
                 }
               }
             } catch (parseError) {
-              mcpLog(`${prefix} ✅ Tool execution completed`);
+              return {
+                message: `${prefix} ✅ Tool execution completed`,
+                textContent: null
+              };
             }
           }
           break;
@@ -366,9 +447,19 @@ class LocalMCPServer {
           const cost = event.total_cost_usd || 0;
           
           if (isError) {
-            mcpLog(`${prefix} ❌ Execution failed`);
+            const logMessage = `${prefix} ❌ Execution failed`;
+            mcpLog(logMessage);
+            return {
+              message: logMessage,
+              textContent: null
+            };
           } else {
-            mcpLog(`${prefix} ✅ Completed (${duration}ms, ${turns} turns, $${cost})`);
+            const logMessage = `${prefix} ✅ Completed (${duration}ms, ${turns} turns, $${cost})`;
+            mcpLog(logMessage);
+            return {
+              message: logMessage,
+              textContent: null
+            };
           }
           break;
           
@@ -376,9 +467,12 @@ class LocalMCPServer {
           // Skip unknown events to avoid noise
           break;
       }
+      
+      return null; // No meaningful content extracted
     } catch (parseError) {
       // Skip non-JSON lines (might be plain text output)
       // Don't log parse errors as they're expected for mixed output
+      return null;
     }
   }
 

@@ -566,19 +566,36 @@ parse_claude_stream_json() {
                             
                             # Show tool result content if not empty
                             if [ -n "$result_content" ] && [ "$result_content" != "null" ] && [ "$result_content" != "" ]; then
-                                if [ "$DEBUG_MODE" = "true" ]; then
-                                    # Debug mode: show more detailed output
-                                    if [ ${#result_content} -gt 500 ]; then
-                                        print_status "[TOOL-OUTPUT] ${result_content:0:500}... (${#result_content} chars total)"
+                                # Check if this is an MCP tool result that might contain subagent logs
+                                if echo "$tool_name" | grep -q "mcp__"; then
+                                    # MCP tools: show more content to capture subagent streaming events
+                                    if [ "$DEBUG_MODE" = "true" ]; then
+                                        if [ ${#result_content} -gt 2000 ]; then
+                                            print_status "[TOOL-OUTPUT] ${result_content:0:2000}... (${#result_content} chars total)"
+                                        else
+                                            print_status "[TOOL-OUTPUT] $result_content"
+                                        fi
                                     else
-                                        print_status "[TOOL-OUTPUT] $result_content"
+                                        if [ ${#result_content} -gt 1000 ]; then
+                                            print_status "[TOOL-OUTPUT] ${result_content:0:1000}... (${#result_content} chars)"
+                                        else
+                                            print_status "[TOOL-OUTPUT] $result_content"
+                                        fi
                                     fi
                                 else
-                                    # Normal mode: show brief output or just indicate content
-                                    if [ ${#result_content} -gt 200 ]; then
-                                        print_status "[TOOL-OUTPUT] ${result_content:0:200}... (${#result_content} chars)"
+                                    # Regular tools: use original limits
+                                    if [ "$DEBUG_MODE" = "true" ]; then
+                                        if [ ${#result_content} -gt 500 ]; then
+                                            print_status "[TOOL-OUTPUT] ${result_content:0:500}... (${#result_content} chars total)"
+                                        else
+                                            print_status "[TOOL-OUTPUT] $result_content"
+                                        fi
                                     else
-                                        print_status "[TOOL-OUTPUT] $result_content"
+                                        if [ ${#result_content} -gt 200 ]; then
+                                            print_status "[TOOL-OUTPUT] ${result_content:0:200}... (${#result_content} chars)"
+                                        else
+                                            print_status "[TOOL-OUTPUT] $result_content"
+                                        fi
                                     fi
                                 fi
                             fi
@@ -634,6 +651,19 @@ setup_mcp_cleanup() {
             rm -f "$HOME/cmd/mcp_server.pid"
             print_success "MCP server cleanup completed"
         fi
+        
+        # Clean up MCP log tail process if running in debug mode
+        if [ -f "$HOME/cmd/mcp_log_tail.pid" ]; then
+            local log_pid=$(cat "$HOME/cmd/mcp_log_tail.pid")
+            print_status "Cleaning up MCP log tail process (PID: $log_pid)..."
+            if kill -0 "$log_pid" 2>/dev/null; then
+                kill "$log_pid" 2>/dev/null || true
+                sleep 1
+                kill -9 "$log_pid" 2>/dev/null || true
+            fi
+            rm -f "$HOME/cmd/mcp_log_tail.pid"
+            print_success "MCP log tail process cleanup completed"
+        fi
     }
     
     # Set trap to cleanup on script exit
@@ -643,10 +673,28 @@ setup_mcp_cleanup() {
 # Execute MCP server management
 setup_mcp_cleanup
 
-# Stream-JSON logging setup
+# Debug mode status and MCP log tailing setup
 if [ "$DEBUG_MODE" = "true" ]; then
     print_status "🐛 DEBUG MODE ENABLED - Real-time Claude event streaming with enhanced MCP visibility"
     print_status "   Tool calls, MCP interactions, and performance metrics will be shown in real-time"
+    
+    # Set up MCP log file tailing (server will create log when Claude starts it)
+    MCP_DEBUG_LOG="$HOME/cmd/mcp-server-debug.log"
+    print_status "🔧 Setting up MCP debug log monitoring at: $MCP_DEBUG_LOG"
+    
+    # Create empty log file and start tailing in background
+    touch "$MCP_DEBUG_LOG"
+    print_status "📋 Starting MCP log tail - subagent tool calls will appear with [MCP-LOG] prefix"
+    
+    # Start tailing the debug log that MCP server will write to
+    (tail -f "$MCP_DEBUG_LOG" | while IFS= read -r line; do 
+        echo "[MCP-LOG] $line"
+    done) &
+    MCP_LOG_PID=$!
+    echo $MCP_LOG_PID > "$HOME/cmd/mcp_log_tail.pid"
+    
+    print_status "✅ MCP debug log monitoring active (PID: $MCP_LOG_PID)"
+    print_status "   Look for: [MCP-LOG] [LOCAL-MCP] [SUBAGENT-*] messages for streaming events"
 else
     print_status "📋 Normal mode - Claude events will be processed with stream-json for better reliability"
 fi
