@@ -93,6 +93,11 @@ function parseArguments() {
           parsed.debug = value;
           i++;
           break;
+        case '-rp':
+        case '--repo-path':
+          parsed.rp = value;
+          i++;
+          break;
         default:
           throw new Error(`Unknown option: ${arg}`);
       }
@@ -414,6 +419,11 @@ async function createSandbox(args) {
     const debugMode = args.debug && args.debug.toLowerCase() === 'yes' ? 'true' : 'false';
     envVars.push(`-D 'claude/env[DEBUG_MODE]=${debugMode}'`);
     
+    // Custom repo path variable
+    if (args.rp) {
+      envVars.push(`-D 'claude/env[CUSTOM_REPO_PATH]=${args.rp}'`);
+    }
+    
     // Add Anthropic API key
     envVars.push(`-D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`);
     
@@ -492,6 +502,10 @@ async function createSandbox(args) {
     // Write GitHub repo
     if (args.r) {
       await transferFile(args.r, sandboxName, '/home/owner/cmd/github_repo.txt', 'GitHub repo');
+    }
+    // Write custom repo path
+    if (args.rp) {
+      await transferFile(args.rp, sandboxName, '/home/owner/cmd/custom_repo_path.txt', 'custom repo path');
     }
     // Write GitHub token (avoid echoing token in logs)
     if (args.ght) {

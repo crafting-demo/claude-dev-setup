@@ -101,6 +101,9 @@ if [ -z "$GITHUB_BRANCH" ] && [ -f "$HOME/cmd/github_branch.txt" ]; then
     export GITHUB_BRANCH=$(cat "$HOME/cmd/github_branch.txt" 2>/dev/null || echo "main")
 fi
 
+if [ -z "$CUSTOM_REPO_PATH" ] && [ -f "$HOME/cmd/custom_repo_path.txt" ]; then
+    export CUSTOM_REPO_PATH=$(cat "$HOME/cmd/custom_repo_path.txt" 2>/dev/null || echo "")
+fi
 
 # END REINTRODUCED SECTION
 
@@ -116,6 +119,7 @@ echo "FILE_PATH: $FILE_PATH" >&2
 echo "LINE_NUMBER: $LINE_NUMBER" >&2
 echo "SHOULD_DELETE: $SHOULD_DELETE" >&2
 echo "SANDBOX_NAME: $SANDBOX_NAME" >&2
+echo "CUSTOM_REPO_PATH: $CUSTOM_REPO_PATH" >&2
 echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[not set]")" >&2
 
 # Validate required environment variables
@@ -735,50 +739,44 @@ fi
 
 # Setup workspace (using MCP-configured directory)
 WORKSPACE_DIR="/home/owner/claude"
-TARGET_REPO_DIR="$WORKSPACE_DIR/target-repo"
 
 print_status "Setting up workspace in MCP-configured directory..."
 mkdir -p "$WORKSPACE_DIR"
 cd "$WORKSPACE_DIR"
 
-# Remove existing target-repo if it exists
-if [ -d "$TARGET_REPO_DIR" ]; then
-    print_warning "Removing existing target-repo directory"
-    rm -rf "$TARGET_REPO_DIR"
-fi
-
-
-
-# Clone the target repository
-print_status "Cloning repository: $GITHUB_REPO"
-gh repo clone "$GITHUB_REPO" target-repo
-cd target-repo
-
-print_success "Repository cloned successfully"
-
-# Copy MCP configuration to target-repo directory where Claude Code will run
-print_status "Copying MCP configuration to target repository..."
-if [ -f "$WORKSPACE_DIR/.mcp.json" ]; then
-    cp "$WORKSPACE_DIR/.mcp.json" .mcp.json
-    print_success "MCP configuration copied to target repository"
-    print_status "MCP config location: $(pwd)/.mcp.json"
-
-    # -----------------------------------------------------------------------------
-    # Ensure the global Claude configuration (~/.claude.json) enables the local MCP
-    # server for the *target-repo* directory we just set up. Without this entry the
-    # `claude mcp list` command will report no servers even when .mcp.json exists.
-    # -----------------------------------------------------------------------------
-
-    # print_status "Patching global Claude config (~/.claude.json) for project scope..."
-
-    # if "$SCRIPT_DIR/patch_claude_config.py" "$(pwd)"; then
-    #     print_success "Global Claude config patched successfully"
-    # else
-    #     print_warning "Failed to patch global Claude config (continuing anyway)"
-    # fi
+# Determine target repo directory based on whether custom repo path is provided
+if [ -n "$CUSTOM_REPO_PATH" ]; then
+    TARGET_REPO_DIR="/home/owner/$CUSTOM_REPO_PATH"
+    print_status "Using custom repo path: $TARGET_REPO_DIR"
+    
+    # Verify the custom repo directory exists
+    if [ ! -d "$TARGET_REPO_DIR" ]; then
+        print_error "Custom repo path does not exist: $TARGET_REPO_DIR"
+        exit 1
+    fi
+    
+    cd "$TARGET_REPO_DIR"
+    print_success "Using existing repository at $TARGET_REPO_DIR"
 else
-    print_warning "No MCP configuration found at $WORKSPACE_DIR/.mcp.json"
+    TARGET_REPO_DIR="$WORKSPACE_DIR/target-repo"
+    
+    # Remove existing target-repo if it exists
+    if [ -d "$TARGET_REPO_DIR" ]; then
+        print_warning "Removing existing target-repo directory"
+        rm -rf "$TARGET_REPO_DIR"
+    fi
+    
+    # Clone the target repository
+    print_status "Cloning repository: $GITHUB_REPO"
+    gh repo clone "$GITHUB_REPO" target-repo
+    cd target-repo
+    
+    print_success "Repository cloned successfully"
 fi
+
+# MCP configuration is now centralized at /home/owner/.mcp.json
+# No need to copy or manage per-project MCP configs
+print_status "Using centralized MCP configuration at /home/owner/.mcp.json"
 
 # Create .claude directory and settings.local.json for permissions
 mkdir -p .claude
@@ -874,7 +872,7 @@ fi
 
 # Test Claude MCP configuration
 print_status "Testing Claude MCP configuration..."
-if claude mcp list 2>&1; then
+if claude --mcp-config /home/owner/.mcp.json mcp list 2>&1; then
     print_success "Claude MCP list command succeeded"
 else
     print_warning "Claude MCP list command failed - MCP may not be properly configured"
@@ -900,7 +898,7 @@ fi
 print_status "Executing Claude Code with stream-json for real-time event monitoring..."
 
 # Use stream-json format for structured output and real-time event processing
-if claude --mcp-config .mcp.json -p "$FINAL_PROMPT" --output-format stream-json --verbose | parse_claude_stream_json; then
+if claude --mcp-config /home/owner/.mcp.json -p "$FINAL_PROMPT" --output-format stream-json --verbose | parse_claude_stream_json; then
     print_success "Claude Code execution pipeline completed successfully"
 else
     exit_code=$?
@@ -910,28 +908,27 @@ else
     exit 1
 fi
 
-# Ensure Claude-specific files are in .gitignore to prevent accidental commits
-print_status "Ensuring Claude configuration files are excluded from git tracking..."
-
-# Create or append to .gitignore with Claude-specific entries
-if [ -f .gitignore ]; then
-    # Check if our entries already exist to avoid duplicates
-    if ! grep -q "^\.mcp\.json$" .gitignore; then
-        echo ".mcp.json" >> .gitignore
-        print_status "Added .mcp.json to .gitignore"
-    fi
-    if ! grep -q "^\.claude/$" .gitignore; then
-        echo ".claude/" >> .gitignore
-        print_status "Added .claude/ to .gitignore"
-    fi
-else
-    # Create new .gitignore with Claude entries
-    cat > .gitignore << EOF
+# Ensure Claude-specific files are in .gitignore to prevent accidental commits (only in git repositories)
+if [ -d .git ]; then
+    print_status "Ensuring Claude configuration files are excluded from git tracking..."
+    
+    # Create or append to .gitignore with Claude-specific entries
+    if [ -f .gitignore ]; then
+        # Check if our entries already exist to avoid duplicates (only .claude/ now since MCP config is centralized)
+        if ! grep -q "^\.claude/$" .gitignore; then
+            echo ".claude/" >> .gitignore
+            print_status "Added .claude/ to .gitignore"
+        fi
+    else
+        # Create new .gitignore with Claude entries
+        cat > .gitignore << EOF
 # Claude Code automation configuration files
-.mcp.json
 .claude/
 EOF
-    print_status "Created .gitignore with Claude configuration exclusions"
+        print_status "Created .gitignore with Claude configuration exclusions"
+    fi
+else
+    print_status "Not a git repository - skipping .gitignore setup"
 fi
 
 print_success "=== Claude Code Automation Completed Successfully ==="

@@ -58,6 +58,7 @@ $CLI_PATH \
   -r "$REPO" \
   -ght "$GITHUB_TOKEN" \
   -b "$BRANCH" \
+  -rp "working-repo" \
   -lmc "$MCP_TOOLS_FILE" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "$SANDBOX_NAME" \

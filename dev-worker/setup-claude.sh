@@ -170,16 +170,10 @@ cd "$HOME/claude" || {
 # Function to configure local MCP server if local tools are defined
 configure_local_mcp_server() {
     local local_mcp_file="$HOME/cmd/local_mcp_tools.txt"
+    local mcp_config_path="/home/owner/.mcp.json"
     
-    print_status "Current directory before MCP config: $(pwd)"
     print_status "Current user: $(whoami)"
-    
-    cd "$HOME/claude" || {
-        print_error "Could not change to claude workspace directory"
-        return 1
-    }
-    
-    print_status "Changed to directory: $(pwd)"
+    print_status "Configuring centralized MCP config at: $mcp_config_path"
     
     if [ -f "$local_mcp_file" ]; then
         print_status "Found local MCP tools configuration, setting up local MCP server..."
@@ -194,21 +188,11 @@ configure_local_mcp_server() {
         # Ensure the MCP server path is owned by the current user
         sudo chown -R "$USER:$USER" "$HOME/claude/dev-worker/local_mcp_server" 2>/dev/null || true
         
-        # Change to the claude workspace directory where .mcp.json should be created
-        cd "$HOME/claude" || {
-            print_error "Could not change to claude workspace directory"
-            return 1
-        }
+        print_status "Configuring centralized MCP server..."
         
-        print_status "Configuring MCP server in directory: $(pwd)"
-        
-        # Add local MCP server to Claude Code configuration
-        if claude mcp add local_server node "$mcp_server_path" --scope project 2>/dev/null; then
-            print_success "Local MCP server configured successfully"
-        else
-            print_warning "Failed to configure local MCP server, trying alternative approach..."
-            # Create .mcp.json manually if claude mcp add fails
-            cat > .mcp.json << EOF
+        # Create .mcp.json directly at the centralized location
+        print_warning "Creating centralized MCP configuration..."
+        cat > "$mcp_config_path" << EOF
 {
   "mcpServers": {
     "local_server": {
@@ -220,23 +204,28 @@ configure_local_mcp_server() {
   }
 }
 EOF
-            # Ensure the config file is owned by the current user
-            chown "$USER:$USER" .mcp.json 2>/dev/null || true
-            print_success "Local MCP server configured via .mcp.json"
-        fi
+        # Ensure the config file is owned by the correct user
+        chown owner:owner "$mcp_config_path" 2>/dev/null || true
+        print_success "Local MCP server configured via centralized .mcp.json"
         
         # Verify the configuration was created
-        if [ -f ".mcp.json" ]; then
-            print_status "MCP configuration file created successfully:"
-            cat .mcp.json
+        if [ -f "$mcp_config_path" ]; then
+            print_status "Centralized MCP configuration file created successfully:"
+            cat "$mcp_config_path"
         else
-            print_warning "No .mcp.json file found after configuration attempt"
+            print_warning "No centralized .mcp.json file found after configuration attempt"
         fi
-        # After creating .mcp.json manually
-        chown owner:owner .mcp.json 2>/dev/null || true
-        print_status "Set .mcp.json ownership to owner:owner"
+        print_status "Set centralized .mcp.json ownership to owner:owner"
     else
         print_status "No local MCP tools configuration found, skipping local server setup"
+        # Create empty MCP config for consistency
+        cat > "$mcp_config_path" << EOF
+{
+  "mcpServers": {}
+}
+EOF
+        chown owner:owner "$mcp_config_path" 2>/dev/null || true
+        print_status "Created empty centralized MCP configuration"
     fi
 }
 
