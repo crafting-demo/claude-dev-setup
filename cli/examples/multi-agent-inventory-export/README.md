@@ -25,7 +25,10 @@ The workflow involves three specialized agents that use **dynamic inputs** to bu
 
 - `run-example.sh` - Main script that executes the multi-agent workflow
 - `orchestration-prompt.txt` - Coordination instructions for the agents
-- `mcp-tools.json` - Configuration defining the three agent tools
+- `agents/` - Directory containing individual agent definitions:
+  - `front_end_engineer.json` - UI implementation agent
+  - `back_end_engineer.json` - API and server-side logic agent
+  - `documentation_writer.json` - Documentation creation agent
 - `tool-whitelist.json` - Allowed tools for the agents
 - `README.md` - This documentation file
 
@@ -86,14 +89,14 @@ This demonstrates true multi-agent collaboration where each agent's work informs
 ### Customizing the Workflow
 
 - **Target Repository**: Edit `REPO` variable in `run-example.sh`
-- **Agent Behavior**: Modify the prompts in `mcp-tools.json`
+- **Agent Behavior**: Modify the individual agent files in `agents/` directory
 - **Orchestration**: Update instructions in `orchestration-prompt.txt`
 - **Available Tools**: Adjust the whitelist in `tool-whitelist.json`
 
 ### Tool Whitelist
 
 The agents have access to these tools:
-- **MCP Agents**: `local_server___software_engineer`, `local_server___qa_analyst`, `local_server___documentation_writer`
+- **MCP Agents**: `local_server___front_end_engineer`, `local_server___back_end_engineer`, `local_server___documentation_writer`
 - **File Operations**: `Read`, `Write`, `Edit`, `LS`, `Grep`
 - **System Tools**: `Bash`, `Task`
 

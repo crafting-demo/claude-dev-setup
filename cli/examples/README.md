@@ -35,7 +35,7 @@ All examples demonstrate:
 - GitHub integration using the `gh` CLI tool with ✅ emoji-prefixed PR titles
 - Real-time workflow streaming
 - Persistent sandbox management
-- MCP tool integration for specialized capabilities
+- Individual agent files for better organization and maintainability
 
 **Quick Start:**
 ```bash
@@ -67,14 +67,49 @@ Each example typically includes:
 - `README.md` - Detailed documentation
 - Configuration files (prompts, tool definitions, etc.)
 
+## Agent File Structure
+
+Each example now uses individual agent files in an `agents/` directory instead of a single `mcp-tools.json` file:
+
+```
+example-directory/
+├── agents/
+│   ├── agent1.json          # Individual agent definition
+│   ├── agent2.json          # Another agent definition
+│   └── agent3.json          # Third agent definition
+├── orchestration-prompt.txt  # Main workflow prompt
+├── tool-whitelist.json      # Available tools configuration
+└── run-example.sh           # Execution script
+```
+
+**Agent File Format:**
+```json
+{
+  "name": "agent_name",
+  "description": "What this agent does and when to invoke it",
+  "prompt": "System prompt defining the agent's role and instructions",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "parameter_name": {
+        "type": "string",
+        "description": "Parameter description"
+      }
+    },
+    "required": ["parameter_name"]
+  }
+}
+```
+
 ## Adding New Examples
 
 When creating new examples:
 1. Create a descriptive directory name
-2. Include a comprehensive README
-3. Provide all necessary configuration files
-4. Make scripts executable (`chmod +x`)
-5. Update this top-level README
+2. Create an `agents/` directory with individual agent JSON files
+3. Include a comprehensive README
+4. Provide all necessary configuration files
+5. Make scripts executable (`chmod +x`)
+6. Update this top-level README
 
 ## Getting Started
 

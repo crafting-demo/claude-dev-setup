@@ -64,9 +64,9 @@ function parseArguments() {
           parsed.mc = value;
           i++;
           break;
-        case '-lmc':
-        case '--local-mcp-config':
-          parsed.lmc = value;
+        case '-ad':
+        case '--agents-dir':
+          parsed.ad = value;
           i++;
           break;
         case '-t':
@@ -131,7 +131,7 @@ Options:
   -i, --issue <number>           Issue number (mutually exclusive with -pr, -b)
   -b, --branch <name>            Branch name (mutually exclusive with -pr, -i)
   -mc, --mcp-config <value>      External MCP config string or file path (optional)
-  -lmc, --local-mcp-config <value> Local MCP tools config string or file path (optional)
+  -ad, --agents-dir <path>       Directory containing individual agent JSON files (optional)
   -t, --tools <value>            Tool whitelist string or file path (optional)
   -template, --template <value>  Custom template name (default: claude-code-automation)
   -d, --delete-when-done <yes|no> Delete sandbox when done (default: yes)
@@ -143,7 +143,8 @@ Options:
 Examples:
   cs-cc -p "Fix the login bug" -r "owner/repo" -ght "ghp_token" -pr 123
   cs-cc -p prompt.txt -r "owner/repo" -ght "ghp_token" -i 456 -mc external_mcp.txt
-  cs-cc -p "Implement feature" -pool my-pool -lmc local_tools.txt -t tool_whitelist.txt
+  cs-cc -p "Fix bugs" -r "owner/repo" -ght "ghp_token" -pr 123 -ad ./agents
+  cs-cc -p "Implement feature" -pool my-pool -ad ./agents -t tool_whitelist.txt
   cs-cc -p "Debug workflow" -r "owner/repo" -ght "token" -b main --debug yes
   cs-cc -p "Custom workflow" -template my-template -r "owner/repo" -ght "token" -b main
 `);
@@ -375,7 +376,7 @@ async function createSandbox(args) {
     // Read file content for parameters that support files
     const prompt = readFileOrString(args.p);
     const mcpConfig = args.mc ? validateJsonContent(readFileOrString(args.mc), 'external MCP config (-mc)') : '';
-    const localMcpConfig = args.lmc ? validateJsonContent(readFileOrString(args.lmc), 'local MCP config (-lmc)') : '';
+    const agentsDir = args.ad || '';
     const toolWhitelist = args.t ? validateJsonContent(readFileOrString(args.t), 'tool whitelist (-t)') : '';
     
     // Generate sandbox name
@@ -445,7 +446,7 @@ async function createSandbox(args) {
       console.log(`Files that would be transferred:`);
       console.log(`  📄 Prompt → /home/owner/cmd/prompt.txt`);
       if (mcpConfig) console.log(`  📄 External MCP config → /home/owner/cmd/external_mcp.txt`);
-      if (localMcpConfig) console.log(`  📄 Local MCP tools → /home/owner/cmd/local_mcp_tools.txt`);
+      if (agentsDir) console.log(`  📄 Agents directory path → /home/owner/cmd/agents_dir.txt`);
       if (toolWhitelist) console.log(`  📄 Tool whitelist → /home/owner/cmd/tool_whitelist.txt`);
       
       console.log(`\n✅ Parameter validation successful. Command would execute: ${cmd}`);
@@ -490,8 +491,8 @@ async function createSandbox(args) {
       await transferFile(mcpConfig, sandboxName, '/home/owner/cmd/external_mcp.txt', 'external MCP config');
     }
     
-    if (localMcpConfig) {
-      await transferFile(localMcpConfig, sandboxName, '/home/owner/cmd/local_mcp_tools.txt', 'local MCP tools');
+    if (agentsDir) {
+      await transferFile(agentsDir, sandboxName, '/home/owner/cmd/agents_dir.txt', 'agents directory path');
     }
     
     if (toolWhitelist) {

@@ -28,6 +28,74 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to process agents directory into MCP tools format
+process_agents_directory() {
+    local agents_dir="$1"
+    local output_file="$2"
+    
+    print_status "Processing agents directory: $agents_dir"
+    
+    # Validate agents directory exists
+    if [ ! -d "$agents_dir" ]; then
+        print_error "Agents directory does not exist: $agents_dir"
+        return 1
+    fi
+    
+    # Find all JSON files in the agents directory
+    local json_files=$(find "$agents_dir" -name "*.json" -type f 2>/dev/null)
+    
+    if [ -z "$json_files" ]; then
+        print_warning "No JSON agent files found in directory: $agents_dir"
+        echo "[]" > "$output_file"
+        return 0
+    fi
+    
+    # Start building the JSON array
+    echo "[" > "$output_file"
+    local first_file=true
+    local agent_count=0
+    
+    # Process each JSON file
+    for json_file in $json_files; do
+        print_status "Processing agent file: $(basename "$json_file")"
+        
+        # Validate JSON format
+        if ! python3 -m json.tool "$json_file" >/dev/null 2>&1; then
+            print_error "Invalid JSON format in file: $json_file"
+            continue
+        fi
+        
+        # Validate required fields
+        local name=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('name', ''))" 2>/dev/null)
+        local description=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('description', ''))" 2>/dev/null)
+        local prompt=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('prompt', ''))" 2>/dev/null)
+        
+        if [ -z "$name" ] || [ -z "$description" ] || [ -z "$prompt" ]; then
+            print_error "Agent file missing required fields (name, description, prompt): $json_file"
+            continue
+        fi
+        
+        # Add comma separator if not first file
+        if [ "$first_file" = false ]; then
+            echo "," >> "$output_file"
+        fi
+        first_file=false
+        
+        # Add the agent JSON content (without surrounding array brackets)
+        cat "$json_file" >> "$output_file"
+        agent_count=$((agent_count + 1))
+        
+        print_status "Added agent: $name"
+    done
+    
+    # Close the JSON array
+    echo "" >> "$output_file"
+    echo "]" >> "$output_file"
+    
+    print_success "Processed $agent_count agent files into MCP tools format"
+    return 0
+}
+
 
 
 print_status "=== Claude Code Automation Workflow ==="
@@ -101,6 +169,11 @@ if [ -z "$GITHUB_BRANCH" ] && [ -f "$HOME/cmd/github_branch.txt" ]; then
     export GITHUB_BRANCH=$(cat "$HOME/cmd/github_branch.txt" 2>/dev/null || echo "main")
 fi
 
+# Load agents directory path if provided
+if [ -f "$HOME/cmd/agents_dir.txt" ]; then
+    export AGENTS_DIR=$(cat "$HOME/cmd/agents_dir.txt" 2>/dev/null || echo "")
+fi
+
 # END REINTRODUCED SECTION
 
 # Debug: Print environment variables (safely)
@@ -116,6 +189,7 @@ echo "LINE_NUMBER: $LINE_NUMBER" >&2
 echo "SHOULD_DELETE: $SHOULD_DELETE" >&2
 echo "SANDBOX_NAME: $SANDBOX_NAME" >&2
 echo "CUSTOM_REPO_PATH: $CUSTOM_REPO_PATH" >&2
+echo "AGENTS_DIR: $AGENTS_DIR" >&2
 echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[not set]")" >&2
 
 # Validate required environment variables

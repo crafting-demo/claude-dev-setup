@@ -28,6 +28,74 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to process agents directory into MCP tools format
+process_agents_directory() {
+    local agents_dir="$1"
+    local output_file="$2"
+    
+    print_status "Processing agents directory: $agents_dir"
+    
+    # Validate agents directory exists
+    if [ ! -d "$agents_dir" ]; then
+        print_error "Agents directory does not exist: $agents_dir"
+        return 1
+    fi
+    
+    # Find all JSON files in the agents directory
+    local json_files=$(find "$agents_dir" -name "*.json" -type f 2>/dev/null)
+    
+    if [ -z "$json_files" ]; then
+        print_warning "No JSON agent files found in directory: $agents_dir"
+        echo "[]" > "$output_file"
+        return 0
+    fi
+    
+    # Start building the JSON array
+    echo "[" > "$output_file"
+    local first_file=true
+    local agent_count=0
+    
+    # Process each JSON file
+    for json_file in $json_files; do
+        print_status "Processing agent file: $(basename "$json_file")"
+        
+        # Validate JSON format
+        if ! python3 -m json.tool "$json_file" >/dev/null 2>&1; then
+            print_error "Invalid JSON format in file: $json_file"
+            continue
+        fi
+        
+        # Validate required fields
+        local name=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('name', ''))" 2>/dev/null)
+        local description=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('description', ''))" 2>/dev/null)
+        local prompt=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('prompt', ''))" 2>/dev/null)
+        
+        if [ -z "$name" ] || [ -z "$description" ] || [ -z "$prompt" ]; then
+            print_error "Agent file missing required fields (name, description, prompt): $json_file"
+            continue
+        fi
+        
+        # Add comma separator if not first file
+        if [ "$first_file" = false ]; then
+            echo "," >> "$output_file"
+        fi
+        first_file=false
+        
+        # Add the agent JSON content (without surrounding array brackets)
+        cat "$json_file" >> "$output_file"
+        agent_count=$((agent_count + 1))
+        
+        print_status "Added agent: $name"
+    done
+    
+    # Close the JSON array
+    echo "" >> "$output_file"
+    echo "]" >> "$output_file"
+    
+    print_success "Processed $agent_count agent files into MCP tools format"
+    return 0
+}
+
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -167,16 +235,36 @@ cd "$HOME/claude" || {
     exit 1
 }
 
-# Function to configure local MCP server if local tools are defined
+# Function to configure local MCP server if agents directory or local tools are defined
 configure_local_mcp_server() {
-    local local_mcp_file="$HOME/cmd/local_mcp_tools.txt"
     local mcp_config_path="/home/owner/.mcp.json"
     
     print_status "Current user: $(whoami)"
     print_status "Configuring centralized MCP config at: $mcp_config_path"
     
-    if [ -f "$local_mcp_file" ]; then
-        print_status "Found local MCP tools configuration, setting up local MCP server..."
+    # Check for agents directory first, then fall back to local MCP tools file
+    local agents_processed=false
+    if [ -n "$AGENTS_DIR" ] && [ -d "$AGENTS_DIR" ]; then
+        print_status "Found agents directory, processing individual agent files..."
+        
+        # Process agents directory into local MCP tools format
+        local temp_mcp_file="$HOME/cmd/local_mcp_tools.txt"
+        if process_agents_directory "$AGENTS_DIR" "$temp_mcp_file"; then
+            agents_processed=true
+            print_success "Successfully processed agents directory into MCP tools format"
+        else
+            print_error "Failed to process agents directory, falling back to checking for existing local MCP tools"
+        fi
+    fi
+    
+    # Check if we have MCP tools (either from agents processing or existing file)
+    local local_mcp_file="$HOME/cmd/local_mcp_tools.txt"
+    if [ "$agents_processed" = true ] || [ -f "$local_mcp_file" ]; then
+        if [ "$agents_processed" = true ]; then
+            print_status "Using processed agents for local MCP server setup..."
+        else
+            print_status "Found existing local MCP tools configuration, setting up local MCP server..."
+        fi
         
         # Check if the local MCP server exists
         local mcp_server_path="$HOME/claude/dev-worker/local_mcp_server/local-mcp-server.js"
@@ -303,6 +391,12 @@ setup_prompt() {
         print_warning "No prompt file found at $prompt_file"
     fi
 }
+
+# Load agents directory path if provided (similar to start-worker.sh)
+if [ -f "$HOME/cmd/agents_dir.txt" ]; then
+    export AGENTS_DIR=$(cat "$HOME/cmd/agents_dir.txt" 2>/dev/null || echo "")
+    print_status "Loaded agents directory: $AGENTS_DIR"
+fi
 
 # Execute MCP configuration steps
 print_status "Current directory before executing MCP config: $(pwd)"

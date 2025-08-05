@@ -15,7 +15,7 @@ SANDBOX_NAME="cs-cc-inv-ex"
 
 # Configuration files
 PROMPT_FILE="$SCRIPT_DIR/orchestration-prompt.txt"
-MCP_TOOLS_FILE="$SCRIPT_DIR/mcp-tools.json"
+AGENTS_DIR="$SCRIPT_DIR/agents"
 TOOL_WHITELIST_FILE="$SCRIPT_DIR/tool-whitelist.json"
 
 # Validate required files exist
@@ -29,8 +29,8 @@ if [ ! -f "$PROMPT_FILE" ]; then
     exit 1
 fi
 
-if [ ! -f "$MCP_TOOLS_FILE" ]; then
-    echo "❌ Error: MCP tools file not found at $MCP_TOOLS_FILE"
+if [ ! -d "$AGENTS_DIR" ]; then
+    echo "❌ Error: Agents directory not found at $AGENTS_DIR"
     exit 1
 fi
 
@@ -56,7 +56,7 @@ $CLI_PATH \
   -r "$REPO" \
   -ght "$GITHUB_TOKEN" \
   -b "$BRANCH" \
-  -lmc "$MCP_TOOLS_FILE" \
+  -ad "$AGENTS_DIR" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "$SANDBOX_NAME" \
   -d no \
