@@ -242,29 +242,10 @@ configure_local_mcp_server() {
     print_status "Current user: $(whoami)"
     print_status "Configuring centralized MCP config at: $mcp_config_path"
     
-    # Check for agents directory first, then fall back to local MCP tools file
-    local agents_processed=false
-    if [ -n "$AGENTS_DIR" ] && [ -d "$AGENTS_DIR" ]; then
-        print_status "Found agents directory, processing individual agent files..."
-        
-        # Process agents directory into local MCP tools format
-        local temp_mcp_file="$HOME/cmd/local_mcp_tools.txt"
-        if process_agents_directory "$AGENTS_DIR" "$temp_mcp_file"; then
-            agents_processed=true
-            print_success "Successfully processed agents directory into MCP tools format"
-        else
-            print_error "Failed to process agents directory, falling back to checking for existing local MCP tools"
-        fi
-    fi
-    
-    # Check if we have MCP tools (either from agents processing or existing file)
+    # Check if we have local MCP tools (processed by cs-cc host-side)
     local local_mcp_file="$HOME/cmd/local_mcp_tools.txt"
-    if [ "$agents_processed" = true ] || [ -f "$local_mcp_file" ]; then
-        if [ "$agents_processed" = true ]; then
-            print_status "Using processed agents for local MCP server setup..."
-        else
-            print_status "Found existing local MCP tools configuration, setting up local MCP server..."
-        fi
+    if [ -f "$local_mcp_file" ]; then
+        print_status "Found local MCP tools configuration, setting up local MCP server..."
         
         # Check if the local MCP server exists
         local mcp_server_path="$HOME/claude/dev-worker/local_mcp_server/local-mcp-server.js"
@@ -392,11 +373,8 @@ setup_prompt() {
     fi
 }
 
-# Load agents directory path if provided (similar to start-worker.sh)
-if [ -f "$HOME/cmd/agents_dir.txt" ]; then
-    export AGENTS_DIR=$(cat "$HOME/cmd/agents_dir.txt" 2>/dev/null || echo "")
-    print_status "Loaded agents directory: $AGENTS_DIR"
-fi
+# Note: Agent directory processing is now done on the host side
+# Agents are processed into local_mcp_tools.txt by cs-cc before transfer
 
 # Execute MCP configuration steps
 print_status "Current directory before executing MCP config: $(pwd)"

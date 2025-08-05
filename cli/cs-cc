@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync, statSync, readdirSync } from 'node:fs';
 import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, isAbsolute } from 'node:path';
+import { dirname, resolve, isAbsolute, join } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -165,6 +165,53 @@ function readFileOrString(value) {
   }
   
   return value;
+}
+
+function processAgentsDirectory(dirPath) {
+  if (!dirPath) return '';
+  
+  const resolvedPath = isAbsolute(dirPath) ? dirPath : resolve(process.cwd(), dirPath);
+  if (!existsSync(resolvedPath)) {
+    throw new Error(`Agents directory not found: ${resolvedPath}`);
+  }
+  
+  // Check if it's actually a directory
+  if (!statSync(resolvedPath).isDirectory()) {
+    throw new Error(`Path is not a directory: ${resolvedPath}`);
+  }
+  
+  // Read all .json files in the directory
+  const agentFiles = readdirSync(resolvedPath)
+    .filter(file => file.endsWith('.json'))
+    .map(file => join(resolvedPath, file));
+  
+  if (agentFiles.length === 0) {
+    console.log(`Warning: No JSON agent files found in directory: ${resolvedPath}`);
+    return '[]';
+  }
+  
+  console.log(`Processing ${agentFiles.length} agent files from ${resolvedPath}`);
+  
+  // Parse and combine all agent files into array
+  const agents = [];
+  for (const file of agentFiles) {
+    try {
+      const content = readFileSync(file, 'utf8');
+      const agent = JSON.parse(content);
+      
+      // Validate required fields
+      if (!agent.name || !agent.description || !agent.prompt) {
+        throw new Error(`Agent file missing required fields (name, description, prompt): ${file}`);
+      }
+      
+      agents.push(agent);
+      console.log(`Added agent: ${agent.name}`);
+    } catch (error) {
+      throw new Error(`Error processing agent file ${file}: ${error.message}`);
+    }
+  }
+  
+  return JSON.stringify(agents, null, 2);
 }
 
 function validateJsonContent(content, parameterName) {
@@ -376,7 +423,7 @@ async function createSandbox(args) {
     // Read file content for parameters that support files
     const prompt = readFileOrString(args.p);
     const mcpConfig = args.mc ? validateJsonContent(readFileOrString(args.mc), 'external MCP config (-mc)') : '';
-    const agentsDir = args.ad || '';
+    const agentsContent = args.ad ? processAgentsDirectory(args.ad) : '';
     const toolWhitelist = args.t ? validateJsonContent(readFileOrString(args.t), 'tool whitelist (-t)') : '';
     
     // Generate sandbox name
@@ -446,7 +493,7 @@ async function createSandbox(args) {
       console.log(`Files that would be transferred:`);
       console.log(`  📄 Prompt → /home/owner/cmd/prompt.txt`);
       if (mcpConfig) console.log(`  📄 External MCP config → /home/owner/cmd/external_mcp.txt`);
-      if (agentsDir) console.log(`  📄 Agents directory path → /home/owner/cmd/agents_dir.txt`);
+      if (agentsContent) console.log(`  📄 Processed agents → /home/owner/cmd/local_mcp_tools.txt`);
       if (toolWhitelist) console.log(`  📄 Tool whitelist → /home/owner/cmd/tool_whitelist.txt`);
       
       console.log(`\n✅ Parameter validation successful. Command would execute: ${cmd}`);
@@ -491,8 +538,8 @@ async function createSandbox(args) {
       await transferFile(mcpConfig, sandboxName, '/home/owner/cmd/external_mcp.txt', 'external MCP config');
     }
     
-    if (agentsDir) {
-      await transferFile(agentsDir, sandboxName, '/home/owner/cmd/agents_dir.txt', 'agents directory path');
+    if (agentsContent) {
+      await transferFile(agentsContent, sandboxName, '/home/owner/cmd/local_mcp_tools.txt', 'processed agents');
     }
     
     if (toolWhitelist) {

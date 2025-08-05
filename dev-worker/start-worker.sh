@@ -169,10 +169,8 @@ if [ -z "$GITHUB_BRANCH" ] && [ -f "$HOME/cmd/github_branch.txt" ]; then
     export GITHUB_BRANCH=$(cat "$HOME/cmd/github_branch.txt" 2>/dev/null || echo "main")
 fi
 
-# Load agents directory path if provided
-if [ -f "$HOME/cmd/agents_dir.txt" ]; then
-    export AGENTS_DIR=$(cat "$HOME/cmd/agents_dir.txt" 2>/dev/null || echo "")
-fi
+# Note: Agent directory processing is now done on the host side
+# Agents are processed into local_mcp_tools.txt by cs-cc before transfer
 
 # END REINTRODUCED SECTION
 
@@ -189,7 +187,7 @@ echo "LINE_NUMBER: $LINE_NUMBER" >&2
 echo "SHOULD_DELETE: $SHOULD_DELETE" >&2
 echo "SANDBOX_NAME: $SANDBOX_NAME" >&2
 echo "CUSTOM_REPO_PATH: $CUSTOM_REPO_PATH" >&2
-echo "AGENTS_DIR: $AGENTS_DIR" >&2
+echo "AGENTS: $([ -f "$HOME/cmd/local_mcp_tools.txt" ] && echo "[processed by host]" || echo "[none]")" >&2
 echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[not set]")" >&2
 
 # Validate required environment variables
