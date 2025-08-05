@@ -101,10 +101,6 @@ if [ -z "$GITHUB_BRANCH" ] && [ -f "$HOME/cmd/github_branch.txt" ]; then
     export GITHUB_BRANCH=$(cat "$HOME/cmd/github_branch.txt" 2>/dev/null || echo "main")
 fi
 
-if [ -z "$CUSTOM_REPO_PATH" ] && [ -f "$HOME/cmd/custom_repo_path.txt" ]; then
-    export CUSTOM_REPO_PATH=$(cat "$HOME/cmd/custom_repo_path.txt" 2>/dev/null || echo "")
-fi
-
 # END REINTRODUCED SECTION
 
 # Debug: Print environment variables (safely)

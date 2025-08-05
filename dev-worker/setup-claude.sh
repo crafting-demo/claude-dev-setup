@@ -189,7 +189,7 @@ configure_local_mcp_server() {
         sudo chown -R "$USER:$USER" "$HOME/claude/dev-worker/local_mcp_server" 2>/dev/null || true
         
         print_status "Configuring centralized MCP server..."
-        
+        executeTool
         # Create .mcp.json directly at the centralized location
         print_warning "Creating centralized MCP configuration..."
         cat > "$mcp_config_path" << EOF

@@ -11,6 +11,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLI_PATH="$SCRIPT_DIR/../../cs-cc"
 REPO="crafting-test1/claude_test"
 BRANCH="main"
+
 SANDBOX_NAME="cs-cc-emoji-ex"
 
 # Configuration files
@@ -58,7 +59,8 @@ $CLI_PATH \
   -r "$REPO" \
   -ght "$GITHUB_TOKEN" \
   -b "$BRANCH" \
-  -rp "working-repo" \
+  -pool "claude-dev-pool" \
+  -template "cc-pool-test-temp" \
   -lmc "$MCP_TOOLS_FILE" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "$SANDBOX_NAME" \

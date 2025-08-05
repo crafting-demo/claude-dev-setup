@@ -503,10 +503,7 @@ async function createSandbox(args) {
     if (args.r) {
       await transferFile(args.r, sandboxName, '/home/owner/cmd/github_repo.txt', 'GitHub repo');
     }
-    // Write custom repo path
-    if (args.rp) {
-      await transferFile(args.rp, sandboxName, '/home/owner/cmd/custom_repo_path.txt', 'custom repo path');
-    }
+
     // Write GitHub token (avoid echoing token in logs)
     if (args.ght) {
       await transferFile(args.ght, sandboxName, '/home/owner/cmd/github_token.txt', 'GitHub token');
