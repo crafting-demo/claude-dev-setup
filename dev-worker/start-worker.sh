@@ -237,8 +237,127 @@ fi
 cd "$SCRIPT_DIR" || true
 set -e
 
-# Read prompt from cmd directory (cs-cc parameter system)
-PROMPT_FILE="$HOME/cmd/prompt.txt"
+# Initialize task management system
+print_status "=== Task Management System Initialization ==="
+
+# Load task management state from cs-cc parameters
+TASK_MODE="create"  # Default mode
+CUSTOM_TASK_ID=""
+PROMPT_FILENAME="prompt.txt"  # Default filename
+
+if [ -f "$HOME/cmd/task_mode.txt" ]; then
+    TASK_MODE=$(cat "$HOME/cmd/task_mode.txt" 2>/dev/null || echo "create")
+    print_status "Task mode: $TASK_MODE"
+fi
+
+if [ -f "$HOME/cmd/task_id.txt" ]; then
+    CUSTOM_TASK_ID=$(cat "$HOME/cmd/task_id.txt" 2>/dev/null || echo "")
+    print_status "Custom task ID: $CUSTOM_TASK_ID"
+fi
+
+if [ -f "$HOME/cmd/prompt_filename.txt" ]; then
+    PROMPT_FILENAME=$(cat "$HOME/cmd/prompt_filename.txt" 2>/dev/null || echo "prompt.txt")
+    print_status "Prompt filename: $PROMPT_FILENAME"
+fi
+
+# Initialize task state manager
+"$SCRIPT_DIR/task-state-manager.sh" init >/dev/null 2>&1 || print_warning "Failed to initialize task state manager"
+
+# Handle task creation or queuing based on mode
+if [ "$TASK_MODE" = "create" ]; then
+    print_status "Creating initial task..."
+    
+    # Read prompt from original file for task creation
+    INITIAL_PROMPT_FILE="$HOME/cmd/prompt.txt"
+    if [ -f "$INITIAL_PROMPT_FILE" ]; then
+        TOOL_WHITELIST_FILE=""
+        if [ -f "$HOME/cmd/tool_whitelist.txt" ]; then
+            TOOL_WHITELIST_FILE="tool_whitelist.txt"
+        fi
+        
+        TASK_ID=$("$SCRIPT_DIR/task-state-manager.sh" create "$INITIAL_PROMPT_FILE" "$TOOL_WHITELIST_FILE" "$CUSTOM_TASK_ID" 2>/dev/null)
+        if [ $? -eq 0 ] && [ -n "$TASK_ID" ]; then
+            print_success "Created task: $TASK_ID"
+            export CURRENT_TASK_ID="$TASK_ID"
+        else
+            print_warning "Failed to create task in state manager, continuing with legacy mode"
+        fi
+    fi
+    
+elif [ "$TASK_MODE" = "resume" ]; then
+    print_status "Resume mode: Adding new task to queue..."
+    
+    # Handle new task file (prompt_new.txt becomes prompt_N.txt)
+    NEW_PROMPT_FILE="$HOME/cmd/prompt_new.txt"
+    if [ -f "$NEW_PROMPT_FILE" ]; then
+        # Generate next task number
+        NEXT_TASK_NUM=1
+        while [ -f "$HOME/cmd/prompt_${NEXT_TASK_NUM}.txt" ]; do
+            NEXT_TASK_NUM=$((NEXT_TASK_NUM + 1))
+        done
+        
+        # Move new prompt to numbered file
+        mv "$NEW_PROMPT_FILE" "$HOME/cmd/prompt_${NEXT_TASK_NUM}.txt"
+        print_status "Moved new prompt to: prompt_${NEXT_TASK_NUM}.txt"
+        
+        # Create task in queue
+        TOOL_WHITELIST_FILE=""
+        if [ -f "$HOME/cmd/tool_whitelist.txt" ]; then
+            TOOL_WHITELIST_FILE="tool_whitelist.txt"
+        fi
+        
+        TASK_ID=$("$SCRIPT_DIR/task-state-manager.sh" create "$HOME/cmd/prompt_${NEXT_TASK_NUM}.txt" "$TOOL_WHITELIST_FILE" "$CUSTOM_TASK_ID" 2>/dev/null)
+        if [ $? -eq 0 ] && [ -n "$TASK_ID" ]; then
+            print_success "Queued new task: $TASK_ID"
+        else
+            print_warning "Failed to queue new task"
+        fi
+    fi
+    
+    # Check if there's a task currently in progress or get next pending task
+    CURRENT_TASK=$("$SCRIPT_DIR/task-state-manager.sh" current 2>/dev/null)
+    if [ "$CURRENT_TASK" = "null" ] || [ -z "$CURRENT_TASK" ]; then
+        print_status "No task in progress, checking for pending tasks..."
+        NEXT_TASK=$("$SCRIPT_DIR/task-state-manager.sh" next 2>/dev/null)
+        if [ "$NEXT_TASK" != "null" ] && [ -n "$NEXT_TASK" ]; then
+            # Start the next pending task
+            TASK_ID=$(echo "$NEXT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('id', ''))" 2>/dev/null)
+            if [ -n "$TASK_ID" ]; then
+                print_status "Starting next pending task: $TASK_ID"
+                "$SCRIPT_DIR/task-state-manager.sh" update "$TASK_ID" "in_progress" >/dev/null 2>&1 || true
+                export CURRENT_TASK_ID="$TASK_ID"
+                
+                # Update prompt file based on task
+                TASK_PROMPT_FILE=$(echo "$NEXT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('promptFile', 'prompt.txt'))" 2>/dev/null)
+                if [ -f "$TASK_PROMPT_FILE" ]; then
+                    PROMPT_FILENAME=$(basename "$TASK_PROMPT_FILE")
+                    print_status "Using task prompt file: $PROMPT_FILENAME"
+                fi
+            fi
+        else
+            print_status "No pending tasks found"
+        fi
+    else
+        print_status "Resuming existing task in progress..."
+        TASK_ID=$(echo "$CURRENT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('id', ''))" 2>/dev/null)
+        export CURRENT_TASK_ID="$TASK_ID"
+        
+        # Get the prompt file for the current task
+        TASK_PROMPT_FILE=$(echo "$CURRENT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('promptFile', 'prompt.txt'))" 2>/dev/null)
+        if [ -f "$TASK_PROMPT_FILE" ]; then
+            PROMPT_FILENAME=$(basename "$TASK_PROMPT_FILE")
+            print_status "Resuming with prompt file: $PROMPT_FILENAME"
+        fi
+    fi
+fi
+
+# Print task queue status
+"$SCRIPT_DIR/task-state-manager.sh" status 2>/dev/null || print_warning "Could not read task queue status"
+
+print_status "=== Task Management Initialization Complete ==="
+
+# Read prompt from determined file (cs-cc parameter system)
+PROMPT_FILE="$HOME/cmd/$PROMPT_FILENAME"
 print_status "Reading prompt from cs-cc parameter file: $PROMPT_FILE"
 
 if [ ! -f "$PROMPT_FILE" ]; then
@@ -667,6 +786,40 @@ parse_claude_stream_json() {
                         mcp_count="unknown"
                     fi
                     print_status "🔧 Claude session initialized (ID: ${session_id:0:8}..., Model: $model, MCP servers: $mcp_count)"
+                    
+                    # Persist session information for task resumption
+                    if [ "$session_id" != "unknown" ] && [ "$session_id" != "null" ]; then
+                        local session_file="$HOME/session.json"
+                        local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+                        
+                        print_status "Persisting session information to $session_file"
+                        cat > "$session_file" << EOF
+{
+  "sessionId": "$session_id",
+  "model": "$model",
+  "mcpServerCount": $mcp_count,
+  "created": "$timestamp",
+  "lastActive": "$timestamp",
+  "status": "active"
+}
+EOF
+                        
+                        # Update current task with session ID if we have one
+                        if [ -f "$HOME/cmd/task_mode.txt" ]; then
+                            local task_mode=$(cat "$HOME/cmd/task_mode.txt" 2>/dev/null || echo "")
+                            if [ "$task_mode" = "create" ] || [ "$task_mode" = "resume" ]; then
+                                # Get current task ID from task state manager
+                                local current_task=$("$SCRIPT_DIR/task-state-manager.sh" current 2>/dev/null)
+                                if [ "$current_task" != "null" ] && [ -n "$current_task" ]; then
+                                    local task_id=$(echo "$current_task" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('id', ''))" 2>/dev/null)
+                                    if [ -n "$task_id" ]; then
+                                        print_status "Updating task $task_id with session ID: $session_id"
+                                        "$SCRIPT_DIR/task-state-manager.sh" update "$task_id" "in_progress" "$session_id" >/dev/null 2>&1 || true
+                                    fi
+                                fi
+                            fi
+                        fi
+                    fi
                 fi
                 ;;
             "assistant")
@@ -1174,6 +1327,84 @@ else
 fi
 
 print_success "=== Claude Code Automation Completed Successfully ==="
+
+# Handle task completion and queue processing
+print_status "=== Task Management Completion Processing ==="
+
+if [ -n "$CURRENT_TASK_ID" ]; then
+    print_status "Marking current task as completed: $CURRENT_TASK_ID"
+    "$SCRIPT_DIR/task-state-manager.sh" update "$CURRENT_TASK_ID" "completed" >/dev/null 2>&1 || print_warning "Failed to update task status"
+    
+    # Check for next pending task in queue
+    NEXT_TASK=$("$SCRIPT_DIR/task-state-manager.sh" next 2>/dev/null)
+    if [ "$NEXT_TASK" != "null" ] && [ -n "$NEXT_TASK" ]; then
+        NEXT_TASK_ID=$(echo "$NEXT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('id', ''))" 2>/dev/null)
+        if [ -n "$NEXT_TASK_ID" ]; then
+            print_status "Found next pending task: $NEXT_TASK_ID"
+            
+            # Check if we should continue with next task (only if not in delete mode)
+            if [ "$SHOULD_DELETE" != "true" ]; then
+                print_status "Starting next task automatically..."
+                
+                # Update task to in_progress
+                "$SCRIPT_DIR/task-state-manager.sh" update "$NEXT_TASK_ID" "in_progress" >/dev/null 2>&1 || true
+                
+                # Get the prompt file for the next task
+                NEXT_PROMPT_FILE=$(echo "$NEXT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('promptFile', ''))" 2>/dev/null)
+                
+                if [ -f "$NEXT_PROMPT_FILE" ]; then
+                    print_status "Executing next task with prompt: $NEXT_PROMPT_FILE"
+                    
+                    # Read the next task prompt
+                    NEXT_CLAUDE_PROMPT=$(cat "$NEXT_PROMPT_FILE")
+                    
+                    # Update tool permissions if new task has different tools
+                    NEXT_TOOL_WHITELIST=$(echo "$NEXT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('toolWhitelist', ''))" 2>/dev/null)
+                    if [ -n "$NEXT_TOOL_WHITELIST" ] && [ -f "$HOME/cmd/$NEXT_TOOL_WHITELIST" ]; then
+                        print_status "Updating tool permissions for next task..."
+                        
+                        # Regenerate permissions for new task
+                        NEXT_PERMISSIONS_OUTPUT=$("$SCRIPT_DIR/generate_permissions_json.py" "$HOME/cmd/$NEXT_TOOL_WHITELIST" --format both 2>/dev/null)
+                        if [ $? -eq 0 ]; then
+                            NEXT_PERMISSIONS_JSON=$(echo "$NEXT_PERMISSIONS_OUTPUT" | sed -n '/^---$/,$p' | tail -n +2)
+                            echo "$NEXT_PERMISSIONS_JSON" > .claude/settings.local.json
+                            print_status "Updated tool permissions for next task"
+                        fi
+                    fi
+                    
+                    # Add task context to prompt
+                    TASK_CONTEXT="This is a follow-up task (ID: $NEXT_TASK_ID) in a multi-task workflow. Previous task completed successfully."
+                    NEXT_FINAL_PROMPT="$TASK_CONTEXT\n\n$NEXT_CLAUDE_PROMPT"
+                    
+                    print_status "Executing next task with Claude Code..."
+                    
+                    # Execute next task
+                    if claude --mcp-config /home/owner/.mcp.json -p "$NEXT_FINAL_PROMPT" --output-format stream-json --verbose | parse_claude_stream_json; then
+                        print_success "Next task completed successfully"
+                        "$SCRIPT_DIR/task-state-manager.sh" update "$NEXT_TASK_ID" "completed" >/dev/null 2>&1 || true
+                    else
+                        print_error "Next task failed"
+                        "$SCRIPT_DIR/task-state-manager.sh" update "$NEXT_TASK_ID" "failed" >/dev/null 2>&1 || true
+                    fi
+                else
+                    print_warning "Next task prompt file not found: $NEXT_PROMPT_FILE"
+                fi
+            else
+                print_status "Sandbox will be deleted - skipping next task execution"
+                print_status "Next task $NEXT_TASK_ID remains in queue for future execution"
+            fi
+        fi
+    else
+        print_status "No more pending tasks in queue"
+    fi
+else
+    print_status "No current task ID found - legacy mode execution"
+fi
+
+# Print final task queue status
+"$SCRIPT_DIR/task-state-manager.sh" status 2>/dev/null || print_warning "Could not read final task queue status"
+
+print_status "=== Task Management Completion Processing Complete ==="
 
 # Print summary
 echo >&2
