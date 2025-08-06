@@ -1,0 +1,49 @@
+You need to enhance the README.md file in this repository by adding emojis and improving its visual appeal.
+
+**TASK DEFINITION:**
+Make the README.md more engaging and visually appealing by adding appropriate emojis and improving formatting. The goal is to make the documentation more friendly and easier to scan while maintaining professionalism.
+
+**REQUIREMENTS:**
+- Add relevant emojis to section headers
+- Include emojis for key features, benefits, or action items  
+- Improve formatting for better readability
+- Make the content more engaging without being excessive
+- Keep it professional and appropriate for a technical audience
+
+**AVAILABLE TOOL:**
+- **emoji_enhancer** - Specializes in adding emojis and visual improvements to documentation
+
+**DELIVERABLES:**
+- Enhanced README.md with appropriate emojis
+- Improved formatting and visual appeal
+- Maintained technical accuracy and professionalism
+
+**APPROACH:**
+Use the emoji_enhancer tool to transform the existing README into a more visually appealing and engaging document. Focus on making it easier to scan and more inviting to read.
+
+**COMPLETION REQUIREMENTS:**
+Once you have successfully enhanced the README with emojis and visual improvements:
+
+1. **Create a new branch** - Use git commands to create a new feature branch for your work:
+   ```bash
+   git checkout -b emoji-enhancement-$(date +%s)
+   ```
+
+2. **Commit your changes** - Stage and commit all your work:
+   ```bash
+   git add .
+   git commit -m "docs: enhance README with emojis and improved formatting"
+   ```
+
+3. **Create Pull Request with Automatic Push** - Use `gh` to handle both pushing and PR creation:
+   ```bash
+   gh pr create --title "✅ docs: enhance README with emojis and improved formatting" --body "Enhanced README.md with appropriate emojis and improved formatting for better readability and visual appeal." --base main
+   ```
+   
+   **Important**: GitHub CLI will automatically push the branch and create the PR without any user interaction.
+
+**IMPORTANT**: The PR title MUST start with the ✅ emoji as the first character.
+
+The pull request should clearly document the visual improvements made to help reviewers understand the enhancements.
+
+Begin enhancing the README with emojis and visual improvements. 
