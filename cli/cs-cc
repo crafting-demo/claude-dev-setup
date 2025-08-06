@@ -126,7 +126,7 @@ Options:
   -p, --prompt <value>           Prompt string or file path (required)
   -pool <name>                   Sandbox pool name (optional)
   -r, --repo <owner/repo>        GitHub repository (required for GitHub integration)
-  -ght, --github-token <token>   GitHub access token (required for GitHub integration)
+  -ght, --github-token <token>   GitHub access token (optional, defaults to Crafting credentials)
   -pr, --pull-request <number>   Pull request number (mutually exclusive with -i, -b)
   -i, --issue <number>           Issue number (mutually exclusive with -pr, -b)
   -b, --branch <name>            Branch name (mutually exclusive with -pr, -i)
@@ -252,7 +252,7 @@ function validateArgs(args) {
         errors.push('Invalid repo format - must be in format owner/repo');
       }
     }
-    if (!args.ght) errors.push('GitHub token is required when using GitHub integration');
+    // GitHub token is now optional - will use Crafting credentials as fallback
     if (githubParams.length === 0) {
       errors.push('One of -pr, -i, or -b must be specified when using GitHub integration');
     }
@@ -351,8 +351,12 @@ async function validateGitHubResources(args) {
     if (args.pr) {
       // Validate PR exists using gh CLI
       const result = await new Promise((resolve) => {
+        const env = { ...process.env };
+        if (args.ght) {
+          env.GITHUB_TOKEN = args.ght;
+        }
         const child = exec(`gh pr view ${args.pr} --repo ${repo}`, 
-          { timeout: 10000, env: { ...process.env, GITHUB_TOKEN: args.ght } });
+          { timeout: 10000, env });
         
         child.on('close', (code) => {
           resolve({ code });
@@ -369,8 +373,12 @@ async function validateGitHubResources(args) {
     } else if (args.i) {
       // Validate issue exists using gh CLI
       const result = await new Promise((resolve) => {
-        const child = exec(`GITHUB_TOKEN=${args.ght} gh issue view ${args.i} --repo ${repo} --json number`, 
-          { timeout: 10000 });
+        const env = { ...process.env };
+        if (args.ght) {
+          env.GITHUB_TOKEN = args.ght;
+        }
+        const child = exec(`gh issue view ${args.i} --repo ${repo} --json number`, 
+          { timeout: 10000, env });
         
         child.on('close', (code) => {
           resolve({ code });
@@ -387,8 +395,12 @@ async function validateGitHubResources(args) {
     } else if (args.b) {
       // Validate branch exists using gh CLI
       const result = await new Promise((resolve) => {
-        const child = exec(`GITHUB_TOKEN=${args.ght} gh api repos/${repo}/branches/${args.b} --jq .name`, 
-          { timeout: 10000 });
+        const env = { ...process.env };
+        if (args.ght) {
+          env.GITHUB_TOKEN = args.ght;
+        }
+        const child = exec(`gh api repos/${repo}/branches/${args.b} --jq .name`, 
+          { timeout: 10000, env });
         
         child.on('close', (code) => {
           resolve({ code });
@@ -443,9 +455,12 @@ async function createSandbox(args) {
     const envVars = [];
     
     // GitHub integration variables
-    if (args.r && args.ght) {
+    if (args.r) {
       envVars.push(`-D 'claude/env[GITHUB_REPO]=${args.r}'`);
-      envVars.push(`-D 'claude/env[GITHUB_TOKEN]=${args.ght}'`);
+      // Only set GITHUB_TOKEN if explicitly provided (otherwise use Crafting credentials)
+      if (args.ght) {
+        envVars.push(`-D 'claude/env[GITHUB_TOKEN]=${args.ght}'`);
+      }
       
       if (args.pr) {
         envVars.push(`-D 'claude/env[PR_NUMBER]=${args.pr}'`);

@@ -336,7 +336,30 @@ print_success "Environment variables validated"
 export PATH="$HOME/.npm-global/bin:$PATH"
 print_status "Updated PATH to include Claude Code installation directory"
 
-# Force logout to clear any previous authentication and re-authenticate with GITHUB_TOKEN
+# Function to get GitHub token from Crafting credentials
+get_crafting_github_token() {
+    local repo_path="$1"
+    
+    print_status "Attempting to retrieve GitHub token from Crafting credentials..."
+    print_status "Repository path: $repo_path"
+    
+    # Use wsenv git-credentials to get token
+    local token
+    token=$(echo -e "protocol=https\nhost=github.com\npath=${repo_path}" \
+            | /opt/sandboxd/sbin/wsenv git-credentials \
+            | awk -F= '/^password=/{print $2}')
+    
+    if [ -n "$token" ]; then
+        print_success "Retrieved GitHub token from Crafting credentials"
+        echo "$token"
+        return 0
+    else
+        print_error "Failed to retrieve GitHub token from Crafting credentials"
+        return 1
+    fi
+}
+
+# Force logout to clear any previous authentication and re-authenticate
 print_status "Resetting GitHub CLI authentication..."
 set +e  # Temporarily disable exit on error
 echo "y" | gh auth logout --hostname github.com >/dev/null 2>&1
@@ -348,37 +371,69 @@ else
     print_status "No previous GitHub CLI session found (this is normal)"
 fi
 
+# Determine GitHub token source and authenticate
 if [ -n "$GITHUB_TOKEN" ]; then
-    print_status "Attempting to authenticate with GitHub CLI using token..."
-    set +e  # Temporarily disable exit on error
-    echo "$GITHUB_TOKEN" | gh auth login --with-token
-    login_result=$?
-    set -e  # Re-enable exit on error
+    print_status "Using explicitly provided GitHub token..."
+    auth_token="$GITHUB_TOKEN"
+    token_source="explicit"
+else
+    print_status "No GitHub token provided, attempting to use Crafting credentials..."
     
-    if [ $login_result -eq 0 ]; then
-        print_success "GitHub CLI authenticated via provided GITHUB_TOKEN"
-    else
-        print_error "GitHub CLI authentication failed with exit code: $login_result"
-        print_status "Checking if GITHUB_TOKEN environment variable authentication works..."
+    # Extract repository path from GITHUB_REPO for Crafting credentials
+    if [ -n "$GITHUB_REPO" ]; then
+        repo_path="$GITHUB_REPO"
+        print_status "Extracting repository path from GITHUB_REPO: $repo_path"
         
-        # Test a simple gh command to see if env var auth works
-        set +e
-        gh auth status
-        status_result=$?
+        # Get token from Crafting credentials
+        set +e  # Don't exit on error during credential retrieval
+        auth_token=$(get_crafting_github_token "$repo_path")
+        credential_result=$?
         set -e
         
-        if [ $status_result -eq 0 ]; then
-            print_success "GitHub CLI authenticated via GITHUB_TOKEN environment variable"
+        if [ $credential_result -eq 0 ] && [ -n "$auth_token" ]; then
+            print_success "Successfully retrieved token from Crafting credentials"
+            token_source="crafting"
         else
-            print_error "GitHub CLI authentication completely failed"
-            print_status "Token length: ${#GITHUB_TOKEN}"
-            print_status "Token starts with: ${GITHUB_TOKEN:0:10}..."
+            print_error "Failed to retrieve token from Crafting credentials"
+            print_error "Both explicit token and Crafting credentials failed"
             exit 1
         fi
+    else
+        print_error "GITHUB_REPO not set - cannot determine repository for Crafting credentials"
+        exit 1
     fi
+fi
+
+# Authenticate with GitHub CLI using the obtained token
+print_status "Authenticating with GitHub CLI using $token_source token..."
+set +e  # Temporarily disable exit on error
+echo "$auth_token" | gh auth login --with-token
+login_result=$?
+set -e  # Re-enable exit on error
+
+if [ $login_result -eq 0 ]; then
+    print_success "GitHub CLI authenticated successfully via $token_source token"
 else
-    print_error "GITHUB_TOKEN is not set"
-    exit 1
+    print_error "GitHub CLI authentication failed with exit code: $login_result"
+    print_status "Checking if token works via environment variable authentication..."
+    
+    # Test a simple gh command to see if env var auth works
+    set +e
+    GITHUB_TOKEN="$auth_token" gh auth status
+    status_result=$?
+    set -e
+    
+    if [ $status_result -eq 0 ]; then
+        print_success "GitHub CLI authenticated via $token_source token environment variable"
+        # Export the token for subsequent commands
+        export GITHUB_TOKEN="$auth_token"
+    else
+        print_error "GitHub CLI authentication completely failed"
+        print_status "Token source: $token_source"
+        print_status "Token length: ${#auth_token}"
+        print_status "Token starts with: ${auth_token:0:10}..."
+        exit 1
+    fi
 fi
 
 # Configure git to use GitHub CLI credentials for push operations
