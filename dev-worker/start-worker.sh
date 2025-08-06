@@ -293,12 +293,12 @@ echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "
 # Validate required environment variables
 print_status "Validating environment variables..."
 
-if [ -z "$GITHUB_REPO" ] || [ -z "$GITHUB_TOKEN" ]; then
+if [ -z "$GITHUB_REPO" ]; then
     print_error "Missing required environment variables"
-    echo "Required: GITHUB_REPO, GITHUB_TOKEN" >&2
+    echo "Required: GITHUB_REPO" >&2
     echo "Current values:" >&2
     echo "GITHUB_REPO: '$GITHUB_REPO'" >&2
-    echo "GITHUB_TOKEN: '$([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")'" >&2
+    echo "GITHUB_TOKEN: '$([ -n "$GITHUB_TOKEN" ] && echo "[set]" || echo "[empty]")' (optional, will use Crafting credentials if not provided)" >&2
     echo "ACTION_TYPE: '$ACTION_TYPE' (optional)" >&2
     exit 1
 fi
