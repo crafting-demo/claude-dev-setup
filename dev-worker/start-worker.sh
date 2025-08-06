@@ -32,12 +32,17 @@ command_exists() {
 process_agents_directory() {
     local agents_dir="$1"
     local output_file="$2"
+    local source_label="$3"  # Optional label for logging (e.g., "CLI" or "repository")
     
-    print_status "Processing agents directory: $agents_dir"
+    if [ -z "$source_label" ]; then
+        source_label="agents"
+    fi
+    
+    print_status "Processing $source_label agents directory: $agents_dir"
     
     # Validate agents directory exists
     if [ ! -d "$agents_dir" ]; then
-        print_error "Agents directory does not exist: $agents_dir"
+        print_error "$source_label agents directory does not exist: $agents_dir"
         return 1
     fi
     
@@ -45,7 +50,7 @@ process_agents_directory() {
     local json_files=$(find "$agents_dir" -name "*.json" -type f 2>/dev/null)
     
     if [ -z "$json_files" ]; then
-        print_warning "No JSON agent files found in directory: $agents_dir"
+        print_warning "No JSON agent files found in $source_label directory: $agents_dir"
         echo "[]" > "$output_file"
         return 0
     fi
@@ -57,11 +62,11 @@ process_agents_directory() {
     
     # Process each JSON file
     for json_file in $json_files; do
-        print_status "Processing agent file: $(basename "$json_file")"
+        print_status "Processing $source_label agent file: $(basename "$json_file")"
         
         # Validate JSON format
         if ! python3 -m json.tool "$json_file" >/dev/null 2>&1; then
-            print_error "Invalid JSON format in file: $json_file"
+            print_error "Invalid JSON format in $source_label file: $json_file"
             continue
         fi
         
@@ -71,7 +76,7 @@ process_agents_directory() {
         local prompt=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('prompt', ''))" 2>/dev/null)
         
         if [ -z "$name" ] || [ -z "$description" ] || [ -z "$prompt" ]; then
-            print_error "Agent file missing required fields (name, description, prompt): $json_file"
+            print_error "$source_label agent file missing required fields (name, description, prompt): $json_file"
             continue
         fi
         
@@ -85,14 +90,108 @@ process_agents_directory() {
         cat "$json_file" >> "$output_file"
         agent_count=$((agent_count + 1))
         
-        print_status "Added agent: $name"
+        print_status "Added $source_label agent: $name"
     done
     
     # Close the JSON array
     echo "" >> "$output_file"
     echo "]" >> "$output_file"
     
-    print_success "Processed $agent_count agent files into MCP tools format"
+    print_success "Processed $agent_count $source_label agent files into MCP tools format"
+    return 0
+}
+
+# Function to aggregate agents from multiple sources into combined MCP tools
+aggregate_agent_sources() {
+    local cli_agents_file="$HOME/cmd/local_mcp_tools.txt"
+    local repo_agents_dir=""
+    local combined_output="$HOME/cmd/combined_mcp_tools.txt"
+    
+    # Determine repository agents directory based on CUSTOM_REPO_PATH
+    if [ -n "$CUSTOM_REPO_PATH" ]; then
+        repo_agents_dir="/home/owner/$CUSTOM_REPO_PATH/agents"
+    else
+        repo_agents_dir="/home/owner/claude/target-repo/agents"
+    fi
+    
+    print_status "Aggregating agent sources..."
+    print_status "CLI agents file: $cli_agents_file"
+    print_status "Repository agents directory: $repo_agents_dir"
+    
+    # Initialize variables for tracking what we found
+    local has_cli_agents=false
+    local has_repo_agents=false
+    local cli_agents_content=""
+    local repo_agents_content=""
+    
+    # Check for CLI agents (processed by cs-cc host-side)
+    if [ -f "$cli_agents_file" ] && [ -s "$cli_agents_file" ]; then
+        print_status "Found CLI agents configuration"
+        cli_agents_content=$(cat "$cli_agents_file")
+        has_cli_agents=true
+    else
+        print_status "No CLI agents found"
+    fi
+    
+    # Check for repository agents
+    if [ -d "$repo_agents_dir" ]; then
+        print_status "Found repository agents directory, processing..."
+        local temp_repo_file="/tmp/repo_agents.json"
+        if process_agents_directory "$repo_agents_dir" "$temp_repo_file" "repository"; then
+            repo_agents_content=$(cat "$temp_repo_file")
+            rm -f "$temp_repo_file"
+            
+            # Check if we actually got any agents (not just empty array)
+            if [ "$repo_agents_content" != "[]" ] && [ -n "$repo_agents_content" ]; then
+                has_repo_agents=true
+                print_success "Repository agents processed successfully"
+            else
+                print_status "Repository agents directory exists but contains no valid agents"
+            fi
+        else
+            print_warning "Failed to process repository agents directory"
+        fi
+    else
+        print_status "No repository agents directory found at: $repo_agents_dir"
+    fi
+    
+    # Combine the agent sources
+    if [ "$has_cli_agents" = true ] && [ "$has_repo_agents" = true ]; then
+        print_status "Combining CLI and repository agents..."
+        
+        # Parse CLI agents and repo agents, then merge arrays
+        # Remove the surrounding brackets and combine
+        cli_agents_inner=$(echo "$cli_agents_content" | sed '1d;$d')  # Remove first and last line ([ and ])
+        repo_agents_inner=$(echo "$repo_agents_content" | sed '1d;$d')  # Remove first and last line ([ and ])
+        
+        # Create combined JSON array
+        echo "[" > "$combined_output"
+        echo "$cli_agents_inner" >> "$combined_output"
+        if [ -n "$cli_agents_inner" ] && [ -n "$repo_agents_inner" ]; then
+            echo "," >> "$combined_output"
+        fi
+        echo "$repo_agents_inner" >> "$combined_output"
+        echo "]" >> "$combined_output"
+        
+        print_success "Combined CLI and repository agents into: $combined_output"
+        
+    elif [ "$has_cli_agents" = true ]; then
+        print_status "Using CLI agents only"
+        cp "$cli_agents_file" "$combined_output"
+        
+    elif [ "$has_repo_agents" = true ]; then
+        print_status "Using repository agents only"
+        echo "$repo_agents_content" > "$combined_output"
+        
+    else
+        print_status "No agents found from any source, creating empty configuration"
+        echo "[]" > "$combined_output"
+    fi
+    
+    # Update the local_mcp_tools.txt to point to our combined file
+    cp "$combined_output" "$cli_agents_file"
+    
+    print_success "Agent aggregation completed. Combined agents available in: $cli_agents_file"
     return 0
 }
 
@@ -841,6 +940,10 @@ else
     
     print_success "Repository cloned successfully"
 fi
+
+# Aggregate agents from CLI and repository sources before MCP setup
+print_status "Aggregating agents from CLI and repository sources..."
+aggregate_agent_sources
 
 # MCP configuration is now centralized at /home/owner/.mcp.json
 # No need to copy or manage per-project MCP configs
