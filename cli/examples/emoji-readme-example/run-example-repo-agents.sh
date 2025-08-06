@@ -12,7 +12,7 @@ CLI_PATH="$SCRIPT_DIR/../../cs-cc"
 REPO="crafting-test1/claude_test"
 BRANCH="main"
 
-SANDBOX_NAME="cs-cc-emoji-repo-agents-ex"
+SANDBOX_NAME="cs-cc-repo-agents"
 
 # Configuration files
 PROMPT_FILE="$SCRIPT_DIR/orchestration-prompt.txt"

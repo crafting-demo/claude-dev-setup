@@ -199,14 +199,15 @@ aggregate_agent_sources() {
 
 print_status "=== Claude Code Automation Workflow ==="
 
-# Step 1: Setup Claude Code and MCP configuration
+# Step 1: Setup Claude Code (skip initial MCP config until after agent aggregation)
 print_status "Setting up Claude Code environment..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 if [ -f "$SCRIPT_DIR/setup-claude.sh" ]; then
-    print_status "Sourcing setup-claude.sh to configure Claude Code and MCP..."
+    print_status "Sourcing setup-claude.sh to configure Claude Code (MCP config deferred)..."
+    export SKIP_INITIAL_MCP_CONFIG="true"
     source "$SCRIPT_DIR/setup-claude.sh"
-    print_success "Claude Code and MCP setup completed"
+    print_success "Claude Code setup completed (MCP config will happen after agent aggregation)"
     
     # Ensure PATH includes Claude Code after installation
     export PATH="$HOME/.npm-global/bin:$PATH"
@@ -944,6 +945,21 @@ fi
 # Aggregate agents from CLI and repository sources before MCP setup
 print_status "Aggregating agents from CLI and repository sources..."
 aggregate_agent_sources
+
+# Now configure MCP servers with the aggregated agents
+print_status "Configuring MCP servers with aggregated agents..."
+configure_local_mcp_server
+
+# Verify MCP configuration now that we have the complete setup
+print_status "Verifying MCP configuration with aggregated agents..."
+if claude mcp list > /dev/null 2>&1; then
+    print_success "MCP configuration verification passed"
+    # Show configured servers
+    print_status "Configured MCP servers:"
+    claude mcp list 2>/dev/null || echo "  (No servers configured)"
+else
+    print_warning "MCP configuration verification failed, but installation may still work"
+fi
 
 # MCP configuration is now centralized at /home/owner/.mcp.json
 # No need to copy or manage per-project MCP configs

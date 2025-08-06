@@ -376,23 +376,35 @@ setup_prompt() {
 # Note: Agent directory processing is now done on the host side
 # Agents are processed into local_mcp_tools.txt by cs-cc before transfer
 
-# Execute MCP configuration steps
-print_status "Current directory before executing MCP config: $(pwd)"
-print_status "Current user: $(whoami)"
-configure_local_mcp_server
-configure_external_mcp_servers
-configure_tool_whitelist
-setup_prompt
-
-# Verify MCP configuration
-print_status "Verifying MCP configuration..."
-if claude mcp list > /dev/null 2>&1; then
-    print_success "MCP configuration verification passed"
-    # Show configured servers
-    print_status "Configured MCP servers:"
-    claude mcp list 2>/dev/null || echo "  (No servers configured)"
+# Execute MCP configuration steps (skip if SKIP_INITIAL_MCP_CONFIG is set)
+if [ "$SKIP_INITIAL_MCP_CONFIG" != "true" ]; then
+    print_status "Current directory before executing MCP config: $(pwd)"
+    print_status "Current user: $(whoami)"
+    configure_local_mcp_server
+    configure_external_mcp_servers
+    configure_tool_whitelist
+    setup_prompt
 else
-    print_warning "MCP configuration verification failed, but installation may still work"
+    print_status "Skipping initial MCP configuration (will be done after agent aggregation)"
+    # Still do non-MCP setup
+    configure_external_mcp_servers
+    configure_tool_whitelist
+    setup_prompt
+fi
+
+# Verify MCP configuration (only if we did the initial setup)
+if [ "$SKIP_INITIAL_MCP_CONFIG" != "true" ]; then
+    print_status "Verifying MCP configuration..."
+    if claude mcp list > /dev/null 2>&1; then
+        print_success "MCP configuration verification passed"
+        # Show configured servers
+        print_status "Configured MCP servers:"
+        claude mcp list 2>/dev/null || echo "  (No servers configured)"
+    else
+        print_warning "MCP configuration verification failed, but installation may still work"
+    fi
+else
+    print_status "MCP verification deferred until after agent aggregation"
 fi
 
 # Final success message
