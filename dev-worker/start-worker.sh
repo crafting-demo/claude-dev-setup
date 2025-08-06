@@ -248,16 +248,33 @@ PROMPT_FILENAME="prompt.txt"  # Default filename
 if [ -f "$HOME/cmd/task_mode.txt" ]; then
     TASK_MODE=$(cat "$HOME/cmd/task_mode.txt" 2>/dev/null || echo "create")
     print_status "Task mode: $TASK_MODE"
+    if [ "$DEBUG_MODE" = "true" ]; then
+        print_status "[DEBUG] Task mode loaded from file: $HOME/cmd/task_mode.txt"
+    fi
 fi
 
 if [ -f "$HOME/cmd/task_id.txt" ]; then
     CUSTOM_TASK_ID=$(cat "$HOME/cmd/task_id.txt" 2>/dev/null || echo "")
     print_status "Custom task ID: $CUSTOM_TASK_ID"
+    if [ "$DEBUG_MODE" = "true" ]; then
+        print_status "[DEBUG] Custom task ID loaded from file: $HOME/cmd/task_id.txt"
+    fi
 fi
 
 if [ -f "$HOME/cmd/prompt_filename.txt" ]; then
     PROMPT_FILENAME=$(cat "$HOME/cmd/prompt_filename.txt" 2>/dev/null || echo "prompt.txt")
     print_status "Prompt filename: $PROMPT_FILENAME"
+    if [ "$DEBUG_MODE" = "true" ]; then
+        print_status "[DEBUG] Prompt filename loaded from file: $HOME/cmd/prompt_filename.txt"
+    fi
+fi
+
+if [ "$DEBUG_MODE" = "true" ]; then
+    print_status "[DEBUG] Task Management State:"
+    print_status "[DEBUG]   TASK_MODE: $TASK_MODE"
+    print_status "[DEBUG]   CUSTOM_TASK_ID: $CUSTOM_TASK_ID"
+    print_status "[DEBUG]   PROMPT_FILENAME: $PROMPT_FILENAME"
+    print_status "[DEBUG]   Available cmd files: $(ls -la $HOME/cmd/ 2>/dev/null | wc -l) files"
 fi
 
 # Initialize task state manager
@@ -1120,43 +1137,75 @@ print_status "Setting up workspace in MCP-configured directory..."
 mkdir -p "$WORKSPACE_DIR"
 cd "$WORKSPACE_DIR"
 
-# Determine target repo directory based on whether custom repo path is provided
-if [ -n "$CUSTOM_REPO_PATH" ]; then
-    TARGET_REPO_DIR="/home/owner/$CUSTOM_REPO_PATH"
-    print_status "Using custom repo path: $TARGET_REPO_DIR"
+# Skip redundant setup in resume mode
+if [ "$TASK_MODE" = "resume" ]; then
+    print_status "Resume mode: Skipping repository setup, using existing workspace"
     
-    # Verify the custom repo directory exists
-    if [ ! -d "$TARGET_REPO_DIR" ]; then
-        print_error "Custom repo path does not exist: $TARGET_REPO_DIR"
-        exit 1
+    # In resume mode, just navigate to existing directory
+    if [ -n "$CUSTOM_REPO_PATH" ]; then
+        TARGET_REPO_DIR="/home/owner/$CUSTOM_REPO_PATH"
+        if [ ! -d "$TARGET_REPO_DIR" ]; then
+            print_error "Resume mode: Custom repo path does not exist: $TARGET_REPO_DIR"
+            exit 1
+        fi
+        cd "$TARGET_REPO_DIR"
+        print_status "Resume mode: Using existing custom repo at $TARGET_REPO_DIR"
+    else
+        TARGET_REPO_DIR="$WORKSPACE_DIR/target-repo"
+        if [ ! -d "$TARGET_REPO_DIR" ]; then
+            print_error "Resume mode: Target repository does not exist: $TARGET_REPO_DIR"
+            print_error "Cannot resume - sandbox may not be properly initialized"
+            exit 1
+        fi
+        cd target-repo
+        print_status "Resume mode: Using existing repository at $TARGET_REPO_DIR"
     fi
     
-    cd "$TARGET_REPO_DIR"
-    print_success "Using existing repository at $TARGET_REPO_DIR"
+    # Skip agent aggregation and MCP setup in resume mode - should already be configured
+    print_status "Resume mode: Skipping agent aggregation and MCP setup (using existing configuration)"
+    
 else
-    TARGET_REPO_DIR="$WORKSPACE_DIR/target-repo"
+    # Normal mode: full setup
+    print_status "Initial mode: Setting up repository and MCP configuration"
     
-    # Remove existing target-repo if it exists
-    if [ -d "$TARGET_REPO_DIR" ]; then
-        print_warning "Removing existing target-repo directory"
-        rm -rf "$TARGET_REPO_DIR"
+    # Determine target repo directory based on whether custom repo path is provided
+    if [ -n "$CUSTOM_REPO_PATH" ]; then
+        TARGET_REPO_DIR="/home/owner/$CUSTOM_REPO_PATH"
+        print_status "Using custom repo path: $TARGET_REPO_DIR"
+        
+        # Verify the custom repo directory exists
+        if [ ! -d "$TARGET_REPO_DIR" ]; then
+            print_error "Custom repo path does not exist: $TARGET_REPO_DIR"
+            exit 1
+        fi
+        
+        cd "$TARGET_REPO_DIR"
+        print_success "Using existing repository at $TARGET_REPO_DIR"
+    else
+        TARGET_REPO_DIR="$WORKSPACE_DIR/target-repo"
+        
+        # Remove existing target-repo if it exists
+        if [ -d "$TARGET_REPO_DIR" ]; then
+            print_warning "Removing existing target-repo directory"
+            rm -rf "$TARGET_REPO_DIR"
+        fi
+        
+        # Clone the target repository
+        print_status "Cloning repository: $GITHUB_REPO"
+        gh repo clone "$GITHUB_REPO" target-repo
+        cd target-repo
+        
+        print_success "Repository cloned successfully"
     fi
-    
-    # Clone the target repository
-    print_status "Cloning repository: $GITHUB_REPO"
-    gh repo clone "$GITHUB_REPO" target-repo
-    cd target-repo
-    
-    print_success "Repository cloned successfully"
+
+    # Aggregate agents from CLI and repository sources before MCP setup
+    print_status "Aggregating agents from CLI and repository sources..."
+    aggregate_agent_sources
+
+    # Now configure MCP servers with the aggregated agents
+    print_status "Configuring MCP servers with aggregated agents..."
+    configure_local_mcp_server
 fi
-
-# Aggregate agents from CLI and repository sources before MCP setup
-print_status "Aggregating agents from CLI and repository sources..."
-aggregate_agent_sources
-
-# Now configure MCP servers with the aggregated agents
-print_status "Configuring MCP servers with aggregated agents..."
-configure_local_mcp_server
 
 # Verify MCP configuration now that we have the complete setup
 print_status "Verifying MCP configuration with aggregated agents..."
@@ -1333,18 +1382,31 @@ print_status "=== Task Management Completion Processing ==="
 
 if [ -n "$CURRENT_TASK_ID" ]; then
     print_status "Marking current task as completed: $CURRENT_TASK_ID"
+    if [ "$DEBUG_MODE" = "true" ]; then
+        print_status "[DEBUG] Updating task status: $CURRENT_TASK_ID -> completed"
+    fi
     "$SCRIPT_DIR/task-state-manager.sh" update "$CURRENT_TASK_ID" "completed" >/dev/null 2>&1 || print_warning "Failed to update task status"
     
     # Check for next pending task in queue
+    if [ "$DEBUG_MODE" = "true" ]; then
+        print_status "[DEBUG] Checking for next pending task in queue..."
+    fi
     NEXT_TASK=$("$SCRIPT_DIR/task-state-manager.sh" next 2>/dev/null)
     if [ "$NEXT_TASK" != "null" ] && [ -n "$NEXT_TASK" ]; then
         NEXT_TASK_ID=$(echo "$NEXT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('id', ''))" 2>/dev/null)
         if [ -n "$NEXT_TASK_ID" ]; then
             print_status "Found next pending task: $NEXT_TASK_ID"
+            if [ "$DEBUG_MODE" = "true" ]; then
+                print_status "[DEBUG] Next task details:"
+                echo "$NEXT_TASK" | python3 -m json.tool 2>/dev/null | sed 's/^/[DEBUG]   /' || print_status "[DEBUG] Could not parse task JSON"
+            fi
             
             # Check if we should continue with next task (only if not in delete mode)
             if [ "$SHOULD_DELETE" != "true" ]; then
                 print_status "Starting next task automatically..."
+                if [ "$DEBUG_MODE" = "true" ]; then
+                    print_status "[DEBUG] SHOULD_DELETE=false, proceeding with next task"
+                fi
                 
                 # Update task to in_progress
                 "$SCRIPT_DIR/task-state-manager.sh" update "$NEXT_TASK_ID" "in_progress" >/dev/null 2>&1 || true
@@ -1362,6 +1424,10 @@ if [ -n "$CURRENT_TASK_ID" ]; then
                     NEXT_TOOL_WHITELIST=$(echo "$NEXT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('toolWhitelist', ''))" 2>/dev/null)
                     if [ -n "$NEXT_TOOL_WHITELIST" ] && [ -f "$HOME/cmd/$NEXT_TOOL_WHITELIST" ]; then
                         print_status "Updating tool permissions for next task..."
+                        if [ "$DEBUG_MODE" = "true" ]; then
+                            print_status "[DEBUG] Tool whitelist file: $HOME/cmd/$NEXT_TOOL_WHITELIST"
+                            print_status "[DEBUG] Current tools: $(cat "$HOME/cmd/$NEXT_TOOL_WHITELIST" 2>/dev/null | tr '\n' ' ')"
+                        fi
                         
                         # Regenerate permissions for new task
                         NEXT_PERMISSIONS_OUTPUT=$("$SCRIPT_DIR/generate_permissions_json.py" "$HOME/cmd/$NEXT_TOOL_WHITELIST" --format both 2>/dev/null)
@@ -1369,7 +1435,17 @@ if [ -n "$CURRENT_TASK_ID" ]; then
                             NEXT_PERMISSIONS_JSON=$(echo "$NEXT_PERMISSIONS_OUTPUT" | sed -n '/^---$/,$p' | tail -n +2)
                             echo "$NEXT_PERMISSIONS_JSON" > .claude/settings.local.json
                             print_status "Updated tool permissions for next task"
+                            if [ "$DEBUG_MODE" = "true" ]; then
+                                TOOL_COUNT=$(echo "$NEXT_PERMISSIONS_OUTPUT" | grep "^TOOL_COUNT=" | cut -d'=' -f2)
+                                print_status "[DEBUG] Updated .claude/settings.local.json with $TOOL_COUNT tools"
+                            fi
+                        else
+                            if [ "$DEBUG_MODE" = "true" ]; then
+                                print_status "[DEBUG] Failed to generate permissions for tool whitelist"
+                            fi
                         fi
+                    elif [ "$DEBUG_MODE" = "true" ]; then
+                        print_status "[DEBUG] No tool whitelist update needed (file: $NEXT_TOOL_WHITELIST, exists: $([ -f "$HOME/cmd/$NEXT_TOOL_WHITELIST" ] && echo 'yes' || echo 'no'))"
                     fi
                     
                     # Add task context to prompt

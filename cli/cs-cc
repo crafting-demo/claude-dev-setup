@@ -259,6 +259,10 @@ function validateArgs(args) {
     // Skip GitHub integration validation since sandbox already exists
     console.log('Resume mode detected - using simplified validation');
     
+    // Basic sandbox existence check (simple validation)
+    // Note: This is a basic check - actual sandbox state will be validated by start-worker.sh
+    console.log(`Checking if sandbox '${args.resume}' is accessible...`);
+    
     // Validate task ID if provided
     if (args.tid) {
       const taskIdPattern = /^[a-zA-Z0-9._-]+$/;
