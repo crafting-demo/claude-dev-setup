@@ -286,64 +286,69 @@ update_task_status() {
     local timestamp
     timestamp=$(get_timestamp)
     
-    # Update task using Python
-    python3 << EOF
+    # Update task using Python (pass args explicitly to avoid shell quoting issues)
+    python3 - "$state_file" "$task_id" "$new_status" "$timestamp" "${session_id:-}" << 'EOF'
 import json
 import sys
 
 try:
-    with open('$state_file', 'r') as f:
+    state_file, task_id, new_status, timestamp, session_id = sys.argv[1:6]
+
+    # Normalize optional session_id
+    if not session_id or session_id.lower() == 'null':
+        session_id = None
+
+    with open(state_file, 'r') as f:
         data = json.load(f)
-    
+
     task_found = False
+
     # First check queue
-    for task in data['queue']:
-        if task['id'] == '$task_id':
-            task['status'] = '$new_status'
-            task['updated'] = '$timestamp'
-            if '$session_id':
-                task['sessionId'] = '$session_id'
+    for task in data.get('queue', []):
+        if task.get('id') == task_id:
+            task['status'] = new_status
+            task['updated'] = timestamp
+            if session_id is not None:
+                task['sessionId'] = session_id
             task_found = True
             break
-    
+
     # If not found in queue, check history (for completed tasks being re-updated)
     if not task_found:
         for task in data.get('history', []):
-            if task['id'] == '$task_id':
-                task['status'] = '$new_status'
-                task['updated'] = '$timestamp'
-                if '$session_id':
-                    task['sessionId'] = '$session_id'
+            if task.get('id') == task_id:
+                task['status'] = new_status
+                task['updated'] = timestamp
+                if session_id is not None:
+                    task['sessionId'] = session_id
                 task_found = True
                 break
-    
+
     if not task_found:
-        print(f"Task not found in queue or history: $task_id", file=sys.stderr)
+        print(f"Task not found in queue or history: {task_id}", file=sys.stderr)
         sys.exit(1)
-    
+
     # If trying to complete a task that's already completed, just succeed silently
-    if '$new_status' == 'completed' and task_found:
-        # Check if task is already in history (already completed)
+    if new_status == 'completed':
         for task in data.get('history', []):
-            if task['id'] == '$task_id' and task.get('status') == 'completed':
+            if task.get('id') == task_id and task.get('status') == 'completed':
                 print('success')  # Already completed, nothing to do
                 sys.exit(0)
-    
-    # Update current task pointer
-    if '$new_status' == 'in_progress':
-        data['currentTask'] = '$task_id'
-    elif '$new_status' in ['completed', 'failed']:
-        if data.get('currentTask') == '$task_id':
+
+    # Update current task pointer and move to history as needed
+    if new_status == 'in_progress':
+        data['currentTask'] = task_id
+    elif new_status in ('completed', 'failed'):
+        if data.get('currentTask') == task_id:
             data['currentTask'] = None
-        # Move to history
-        for i, task in enumerate(data['queue']):
-            if task['id'] == '$task_id':
-                data['history'].append(data['queue'].pop(i))
+        for i, task in enumerate(data.get('queue', [])):
+            if task.get('id') == task_id:
+                data.setdefault('history', []).append(data['queue'].pop(i))
                 break
-    
-    with open('$state_file', 'w') as f:
+
+    with open(state_file, 'w') as f:
         json.dump(data, f, indent=2)
-    
+
     print('success')
 except Exception as e:
     print(f"Error updating task: {e}", file=sys.stderr)
