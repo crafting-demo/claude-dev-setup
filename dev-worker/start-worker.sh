@@ -234,7 +234,18 @@ EOF
 
 print_status "=== Claude Code Automation Workflow ==="
 
-# Step 1: Setup Claude Code (skip initial MCP config until after agent aggregation)
+# Step 1: Determine task mode as early as possible so we can pivot setup behavior
+# Load TASK_MODE from /home/owner/cmd/task_mode.txt if not already set
+if [ -z "${TASK_MODE:-}" ]; then
+    if [ -f "$HOME/cmd/task_mode.txt" ]; then
+        TASK_MODE=$(tr -d '\r' < "$HOME/cmd/task_mode.txt" | tr -d ' \t')
+    fi
+fi
+if [ -z "${TASK_MODE:-}" ]; then
+    TASK_MODE="create"
+fi
+
+# Step 2: Setup Claude Code (skip initial MCP config until after agent aggregation)
 print_status "Setting up Claude Code environment..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
