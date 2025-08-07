@@ -118,6 +118,10 @@ function parseArguments() {
         throw new Error(`Option ${arg} requires a value`);
       }
     } else {
+      // Skip empty arguments
+      if (arg.trim() === '') {
+        continue;
+      }
       throw new Error(`Unexpected positional argument: ${arg}`);
     }
   }

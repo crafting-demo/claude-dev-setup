@@ -74,8 +74,6 @@ echo "Executing follow-up task with cs-cc in resume mode..."
 "$CLI_PATH" \
     --resume "$SANDBOX_NAME" \
     -p "$TASK2_PROMPT" \
-    -ght "$GITHUB_TOKEN" \
-    -ad "$AGENTS_DIR" \
     -t "$TASK2_TOOLS" \
     -tid "badges-structure-task" \
     --debug yes

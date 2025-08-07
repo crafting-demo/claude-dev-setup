@@ -155,25 +155,60 @@ aggregate_agent_sources() {
         print_status "No repository agents directory found at: $repo_agents_dir"
     fi
     
-    # Combine the agent sources
+    # Combine the agent sources with deduplication
     if [ "$has_cli_agents" = true ] && [ "$has_repo_agents" = true ]; then
-        print_status "Combining CLI and repository agents..."
+        print_status "Combining CLI and repository agents with deduplication..."
         
-        # Parse CLI agents and repo agents, then merge arrays
-        # Remove the surrounding brackets and combine
-        cli_agents_inner=$(echo "$cli_agents_content" | sed '1d;$d')  # Remove first and last line ([ and ])
-        repo_agents_inner=$(echo "$repo_agents_content" | sed '1d;$d')  # Remove first and last line ([ and ])
+        # Use a temporary Python script to properly merge and deduplicate JSON arrays
+        # Priority: CLI agents override repository agents with same name
+        cat > "/tmp/merge_agents.py" << 'EOF'
+import json
+import sys
+
+def merge_agents(cli_content, repo_content):
+    try:
+        cli_agents = json.loads(cli_content)
+        repo_agents = json.loads(repo_content)
         
-        # Create combined JSON array
-        echo "[" > "$combined_output"
-        echo "$cli_agents_inner" >> "$combined_output"
-        if [ -n "$cli_agents_inner" ] && [ -n "$repo_agents_inner" ]; then
-            echo "," >> "$combined_output"
+        # Create a dictionary to track agents by name (CLI takes priority)
+        agents_dict = {}
+        
+        # Add repository agents first
+        for agent in repo_agents:
+            if 'name' in agent:
+                agents_dict[agent['name']] = agent
+        
+        # Add CLI agents (will override repo agents with same name)
+        for agent in cli_agents:
+            if 'name' in agent:
+                agents_dict[agent['name']] = agent
+                
+        # Convert back to list and output
+        merged_agents = list(agents_dict.values())
+        return json.dumps(merged_agents, indent=2)
+    except Exception as e:
+        print(f"Error merging agents: {e}", file=sys.stderr)
+        return cli_content  # Fallback to CLI agents only
+        
+if __name__ == "__main__":
+    cli_content = sys.argv[1]
+    repo_content = sys.argv[2]
+    print(merge_agents(cli_content, repo_content))
+EOF
+        
+        # Merge agents with deduplication
+        merged_content=$(python3 /tmp/merge_agents.py "$cli_agents_content" "$repo_agents_content" 2>/dev/null)
+        
+        if [ $? -eq 0 ] && [ -n "$merged_content" ]; then
+            echo "$merged_content" > "$combined_output"
+            print_success "Combined and deduplicated CLI and repository agents into: $combined_output"
+        else
+            print_warning "Agent deduplication failed, using CLI agents only"
+            echo "$cli_agents_content" > "$combined_output"
         fi
-        echo "$repo_agents_inner" >> "$combined_output"
-        echo "]" >> "$combined_output"
         
-        print_success "Combined CLI and repository agents into: $combined_output"
+        # Clean up temporary script
+        rm -f "/tmp/merge_agents.py"
         
     elif [ "$has_cli_agents" = true ]; then
         print_status "Using CLI agents only"
@@ -1341,8 +1376,31 @@ fi
 # Run Claude Code with stream-json output
 print_status "Executing Claude Code with stream-json for real-time event monitoring..."
 
+# Check for session reuse in resume mode
+CLAUDE_RESUME_FLAG=""
+if [ "$TASK_MODE" = "resume" ]; then
+    # Try to find existing session ID from session.json
+    SESSION_FILE="$HOME/session.json"
+    if [ -f "$SESSION_FILE" ]; then
+        if command -v jq >/dev/null 2>&1; then
+            EXISTING_SESSION_ID=$(jq -r '.sessionId // empty' "$SESSION_FILE" 2>/dev/null)
+            if [ -n "$EXISTING_SESSION_ID" ] && [ "$EXISTING_SESSION_ID" != "null" ]; then
+                print_status "Resume mode: Found existing session ID: ${EXISTING_SESSION_ID:0:8}..."
+                CLAUDE_RESUME_FLAG="--resume $EXISTING_SESSION_ID"
+                print_status "Resume mode: Will attempt to reuse existing Claude session"
+            else
+                print_status "Resume mode: No valid session ID found, starting new session"
+            fi
+        else
+            print_status "Resume mode: jq not available, cannot parse session file"
+        fi
+    else
+        print_status "Resume mode: No session file found, starting new session"
+    fi
+fi
+
 # Use stream-json format for structured output and real-time event processing
-if claude --mcp-config /home/owner/.mcp.json -p "$FINAL_PROMPT" --output-format stream-json --verbose | parse_claude_stream_json; then
+if claude --mcp-config /home/owner/.mcp.json -p "$FINAL_PROMPT" $CLAUDE_RESUME_FLAG --output-format stream-json --verbose | parse_claude_stream_json; then
     print_success "Claude Code execution pipeline completed successfully"
 else
     exit_code=$?
@@ -1454,8 +1512,18 @@ if [ -n "$CURRENT_TASK_ID" ]; then
                     
                     print_status "Executing next task with Claude Code..."
                     
+                    # Check for session reuse for next task
+                    NEXT_CLAUDE_RESUME_FLAG=""
+                    if [ -f "$HOME/session.json" ] && command -v jq >/dev/null 2>&1; then
+                        NEXT_SESSION_ID=$(jq -r '.sessionId // empty' "$HOME/session.json" 2>/dev/null)
+                        if [ -n "$NEXT_SESSION_ID" ] && [ "$NEXT_SESSION_ID" != "null" ]; then
+                            print_status "Next task: Reusing session ID: ${NEXT_SESSION_ID:0:8}..."
+                            NEXT_CLAUDE_RESUME_FLAG="--resume $NEXT_SESSION_ID"
+                        fi
+                    fi
+                    
                     # Execute next task
-                    if claude --mcp-config /home/owner/.mcp.json -p "$NEXT_FINAL_PROMPT" --output-format stream-json --verbose | parse_claude_stream_json; then
+                    if claude --mcp-config /home/owner/.mcp.json -p "$NEXT_FINAL_PROMPT" $NEXT_CLAUDE_RESUME_FLAG --output-format stream-json --verbose | parse_claude_stream_json; then
                         print_success "Next task completed successfully"
                         "$SCRIPT_DIR/task-state-manager.sh" update "$NEXT_TASK_ID" "completed" >/dev/null 2>&1 || true
                     else
