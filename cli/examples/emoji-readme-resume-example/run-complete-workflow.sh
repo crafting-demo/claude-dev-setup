@@ -8,6 +8,19 @@ set -e
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Check for required environment variables
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "❌ Error: GITHUB_TOKEN environment variable is required"
+    echo "Usage: GITHUB_TOKEN=your_token_here ANTHROPIC_API_KEY=your_key_here ./run-complete-workflow.sh"
+    exit 1
+fi
+
+if [ -z "$ANTHROPIC_API_KEY" ]; then
+    echo "❌ Error: ANTHROPIC_API_KEY environment variable is required"
+    echo "Usage: GITHUB_TOKEN=your_token_here ANTHROPIC_API_KEY=your_key_here ./run-complete-workflow.sh"
+    exit 1
+fi
+
 echo "🚀 Emoji README Resume Example - Complete Multi-Task Workflow"
 echo "============================================================"
 echo ""
@@ -18,8 +31,8 @@ echo "  3. Different tool sets for different tasks"
 echo "  4. Task queue processing and state management"
 echo ""
 
-# Generate unique sandbox name for this run
-SANDBOX_NAME="emoji-resume-$(date +%m%d-%H%M%S)"
+# Generate unique sandbox name for this run (max 20 chars)
+SANDBOX_NAME="emoji-$(date +%m%d%H%M)"
 echo "📦 Generated sandbox name: $SANDBOX_NAME"
 echo ""
 
@@ -31,7 +44,6 @@ echo "- Uses emoji_enhancer agent"
 echo "- Creates initial sandbox and task queue"
 echo ""
 
-read -p "Press Enter to start Task 1..."
 "$SCRIPT_DIR/run-task1-initial.sh"
 
 if [ $? -ne 0 ]; then
@@ -52,7 +64,6 @@ echo "- Uses badge_generator and structure_organizer agents"
 echo "- Resumes existing sandbox with different tools"
 echo ""
 
-read -p "Press Enter to start Task 2..."
 "$SCRIPT_DIR/run-task2-followup.sh" "$SANDBOX_NAME"
 
 if [ $? -ne 0 ]; then

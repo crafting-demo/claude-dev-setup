@@ -42,6 +42,17 @@ emoji-readme-resume-example/
 └── run-complete-workflow.sh           # Complete workflow demo
 ```
 
+## Prerequisites
+
+Before running any scripts, you need to set the required environment variables:
+
+```bash
+export GITHUB_TOKEN="your_github_token_here"
+export ANTHROPIC_API_KEY="your_anthropic_api_key_here"
+```
+
+**Note**: Sandbox names are limited to 20 characters, so the generated names follow the format `emoji-MMDDHHMM`.
+
 ## Usage
 
 ### Option 1: Complete Workflow (Recommended)
@@ -49,27 +60,26 @@ emoji-readme-resume-example/
 Run the complete workflow demonstration:
 
 ```bash
-./run-complete-workflow.sh
+GITHUB_TOKEN="your_token" ANTHROPIC_API_KEY="your_key" ./run-complete-workflow.sh
 ```
 
 This will:
-1. Execute Task 1 (emoji enhancement)
-2. Wait for user confirmation
-3. Execute Task 2 (badges and structure) 
-4. Show final results and task state
+1. Execute Task 1 (emoji enhancement) automatically
+2. Execute Task 2 (badges and structure) automatically
+3. Show final results and task state
 
 ### Option 2: Step-by-Step Execution
 
 #### Step 1: Execute Initial Task
 ```bash
-./run-task1-initial.sh
+GITHUB_TOKEN="your_token" ANTHROPIC_API_KEY="your_key" ./run-task1-initial.sh
 ```
 
-This creates a sandbox with a name like `emoji-resume-0806-2045` and executes the first task.
+This creates a sandbox with a name like `emoji-08071410` and executes the first task.
 
 #### Step 2: Execute Follow-up Task
 ```bash
-./run-task2-followup.sh <sandbox_name>
+GITHUB_TOKEN="your_token" ANTHROPIC_API_KEY="your_key" ./run-task2-followup.sh <sandbox_name>
 ```
 
 Replace `<sandbox_name>` with the name from Step 1. This resumes the existing sandbox with a new task.
@@ -81,6 +91,7 @@ Replace `<sandbox_name>` with the name from Step 1. This resumes the existing sa
 ../../cs-cc \
     -p task1-emoji-enhancement.txt \
     -r "crafting-test1/claude_test" \
+    -ght "your_github_token" \
     -b main \
     -ad agents \
     -t tool-whitelist.json \
@@ -95,6 +106,7 @@ Replace `<sandbox_name>` with the name from Step 1. This resumes the existing sa
 ../../cs-cc \
     --resume "my-emoji-sandbox" \
     -p task2-badges-and-structure.txt \
+    -ght "your_github_token" \
     -ad agents \
     -t task2-tools.json \
     -tid "badges-structure-task" \

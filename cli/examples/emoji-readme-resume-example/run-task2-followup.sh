@@ -14,7 +14,20 @@ SANDBOX_NAME="$1"
 if [ -z "$SANDBOX_NAME" ]; then
     echo "❌ Error: Sandbox name required"
     echo "Usage: $0 <sandbox_name>"
-    echo "Example: $0 emoji-resume-0806-2045"
+    echo "Example: $0 emoji-08071410"
+    exit 1
+fi
+
+# Check for required environment variables
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "❌ Error: GITHUB_TOKEN environment variable is required"
+    echo "Usage: GITHUB_TOKEN=your_token_here $0 <sandbox_name>"
+    exit 1
+fi
+
+if [ -z "$ANTHROPIC_API_KEY" ]; then
+    echo "❌ Error: ANTHROPIC_API_KEY environment variable is required"
+    echo "Usage: ANTHROPIC_API_KEY=your_key_here GITHUB_TOKEN=your_token_here $0 <sandbox_name>"
     exit 1
 fi
 
@@ -61,6 +74,7 @@ echo "Executing follow-up task with cs-cc in resume mode..."
 "$CLI_PATH" \
     --resume "$SANDBOX_NAME" \
     -p "$TASK2_PROMPT" \
+    -ght "$GITHUB_TOKEN" \
     -ad "$AGENTS_DIR" \
     -t "$TASK2_TOOLS" \
     -tid "badges-structure-task" \

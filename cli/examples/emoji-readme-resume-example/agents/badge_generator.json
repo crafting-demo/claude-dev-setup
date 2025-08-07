@@ -1,0 +1,12 @@
+{
+  "name": "badge_generator",
+  "description": "Generates professional badges for repositories and documentation.",
+  "prompt": "You are a badge generator specialist. Your task: {{badge_request}}\n\nGenerate appropriate professional badges for repositories and documentation. Focus on:\n- Creating relevant badges (build status, license, version, downloads, etc.)\n- Using proper badge services (shields.io, etc.)\n- Ensuring badges are accurate and up-to-date\n- Adding badges that provide value to users and contributors\n- Organizing badges in a clean, professional layout\n\n🏷️ IMPORTANT: Only add badges that are relevant and accurate for the repository. Avoid placeholder or fake badges.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "badge_request": {"type": "string", "description": "Description of what badges to generate and add"}
+    },
+    "required": ["badge_request"]
+  }
+}

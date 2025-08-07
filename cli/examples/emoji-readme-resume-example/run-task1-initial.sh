@@ -16,6 +16,19 @@ TASK1_PROMPT="$SCRIPT_DIR/task1-emoji-enhancement.txt"
 AGENTS_DIR="$SCRIPT_DIR/agents"
 TOOL_WHITELIST="$SCRIPT_DIR/tool-whitelist.json"
 
+# Check for required environment variables
+if [ -z "$GITHUB_TOKEN" ]; then
+    echo "❌ Error: GITHUB_TOKEN environment variable is required"
+    echo "Usage: GITHUB_TOKEN=your_token_here ./run-task1-initial.sh"
+    exit 1
+fi
+
+if [ -z "$ANTHROPIC_API_KEY" ]; then
+    echo "❌ Error: ANTHROPIC_API_KEY environment variable is required"
+    echo "Usage: ANTHROPIC_API_KEY=your_key_here GITHUB_TOKEN=your_token_here ./run-task1-initial.sh"
+    exit 1
+fi
+
 # Validate required files exist
 if [ ! -f "$CLI_PATH" ]; then
     echo "❌ Error: cs-cc CLI not found at $CLI_PATH"
@@ -45,8 +58,8 @@ echo "🤖 Agents directory: $AGENTS_DIR"
 echo "🔧 Tool whitelist: $TOOL_WHITELIST"
 echo ""
 
-# Generate sandbox name
-SANDBOX_NAME="emoji-resume-$(date +%m%d-%H%M)"
+# Generate sandbox name (max 20 chars)
+SANDBOX_NAME="emoji-$(date +%m%d%H%M)"
 echo "📦 Sandbox name: $SANDBOX_NAME"
 
 # Execute cs-cc with task management for initial task
@@ -54,10 +67,13 @@ echo "Executing initial task with cs-cc..."
 "$CLI_PATH" \
     -p "$TASK1_PROMPT" \
     -r "$REPO" \
+    -ght "$GITHUB_TOKEN" \
     -b "$BRANCH" \
     -ad "$AGENTS_DIR" \
     -t "$TOOL_WHITELIST" \
     -tid "emoji-enhancement-task" \
+    -pool "claude-dev-pool" \
+    -template "cc-pool-test-temp" \
     -n "$SANDBOX_NAME" \
     -d no \
     --debug yes
