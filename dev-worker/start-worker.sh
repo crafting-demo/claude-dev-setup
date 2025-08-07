@@ -1469,6 +1469,9 @@ if [ -n "$CURRENT_TASK_ID" ]; then
                 # Update task to in_progress
                 "$SCRIPT_DIR/task-state-manager.sh" update "$NEXT_TASK_ID" "in_progress" >/dev/null 2>&1 || true
                 
+                # Update current task ID for proper completion tracking
+                export CURRENT_TASK_ID="$NEXT_TASK_ID"
+                
                 # Get the prompt file for the next task
                 NEXT_PROMPT_FILE=$(echo "$NEXT_TASK" | python3 -c "import json, sys; data=json.load(sys.stdin); print(data.get('promptFile', ''))" 2>/dev/null)
                 
