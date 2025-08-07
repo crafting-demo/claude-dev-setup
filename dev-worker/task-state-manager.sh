@@ -321,6 +321,14 @@ try:
         print(f"Task not found in queue or history: $task_id", file=sys.stderr)
         sys.exit(1)
     
+    # If trying to complete a task that's already completed, just succeed silently
+    if '$new_status' == 'completed' and task_found:
+        # Check if task is already in history (already completed)
+        for task in data.get('history', []):
+            if task['id'] == '$task_id' and task.get('status') == 'completed':
+                print('success')  # Already completed, nothing to do
+                sys.exit(0)
+    
     # Update current task pointer
     if '$new_status' == 'in_progress':
         data['currentTask'] = '$task_id'
