@@ -238,7 +238,13 @@ print_status "=== Claude Code Automation Workflow ==="
 print_status "Setting up Claude Code environment..."
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [ -f "$SCRIPT_DIR/setup-claude.sh" ]; then
+# Skip Claude Code setup in resume mode (already installed)
+if [ "$TASK_MODE" = "resume" ]; then
+    print_status "Resume mode: Skipping Claude Code setup (already installed)"
+    # Ensure PATH includes Claude Code
+    export PATH="$HOME/.npm-global/bin:$PATH"
+    print_status "PATH confirmed: $PATH"
+elif [ -f "$SCRIPT_DIR/setup-claude.sh" ]; then
     print_status "Sourcing setup-claude.sh to configure Claude Code (MCP config deferred)..."
     export SKIP_INITIAL_MCP_CONFIG="true"
     source "$SCRIPT_DIR/setup-claude.sh"
