@@ -296,6 +296,7 @@ try:
         data = json.load(f)
     
     task_found = False
+    # First check queue
     for task in data['queue']:
         if task['id'] == '$task_id':
             task['status'] = '$new_status'
@@ -305,8 +306,19 @@ try:
             task_found = True
             break
     
+    # If not found in queue, check history (for completed tasks being re-updated)
     if not task_found:
-        print(f"Task not found: $task_id", file=sys.stderr)
+        for task in data.get('history', []):
+            if task['id'] == '$task_id':
+                task['status'] = '$new_status'
+                task['updated'] = '$timestamp'
+                if '$session_id':
+                    task['sessionId'] = '$session_id'
+                task_found = True
+                break
+    
+    if not task_found:
+        print(f"Task not found in queue or history: $task_id", file=sys.stderr)
         sys.exit(1)
     
     # Update current task pointer

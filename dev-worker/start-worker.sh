@@ -1439,11 +1439,18 @@ print_success "=== Claude Code Automation Completed Successfully ==="
 print_status "=== Task Management Completion Processing ==="
 
 if [ -n "$CURRENT_TASK_ID" ]; then
-    print_status "Marking current task as completed: $CURRENT_TASK_ID"
-    if [ "$DEBUG_MODE" = "true" ]; then
-        print_status "[DEBUG] Updating task status: $CURRENT_TASK_ID -> completed"
+    # Check if task is already completed before trying to update it
+    CURRENT_TASK_STATUS=$("$SCRIPT_DIR/task-state-manager.sh" current 2>/dev/null | python3 -c "import json, sys; data=json.load(sys.stdin) if sys.stdin.read().strip() != 'null' else None; print(data.get('status', 'unknown') if data else 'not_found')" 2>/dev/null)
+    
+    if [ "$CURRENT_TASK_STATUS" != "completed" ] && [ "$CURRENT_TASK_STATUS" != "not_found" ]; then
+        print_status "Marking current task as completed: $CURRENT_TASK_ID"
+        if [ "$DEBUG_MODE" = "true" ]; then
+            print_status "[DEBUG] Updating task status: $CURRENT_TASK_ID -> completed"
+        fi
+        "$SCRIPT_DIR/task-state-manager.sh" update "$CURRENT_TASK_ID" "completed" >/dev/null 2>&1 || print_warning "Failed to update task status"
+    else
+        print_status "Task $CURRENT_TASK_ID already completed, skipping status update"
     fi
-    "$SCRIPT_DIR/task-state-manager.sh" update "$CURRENT_TASK_ID" "completed" >/dev/null 2>&1 || print_warning "Failed to update task status"
     
     # Check for next pending task in queue
     if [ "$DEBUG_MODE" = "true" ]; then
