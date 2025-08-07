@@ -1096,6 +1096,9 @@ setup_mcp_cleanup() {
             rm -f "$HOME/cmd/mcp_log_tail.pid"
             print_success "MCP log tail process cleanup completed"
         fi
+        
+        # Ensure cleanup always succeeds to prevent script exit code issues
+        return 0
     }
     
     # Set trap to cleanup on script exit
