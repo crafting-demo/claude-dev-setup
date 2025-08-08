@@ -1,0 +1,12 @@
+{
+  "name": "documentation_writer",
+  "description": "Updates documentation based on feature details.",
+  "prompt": "You are a technical writer. Document this feature: {{feature_summary}}\n\nUpdate the README.md and any other relevant documentation to explain how to use this new functionality. Include usage examples, configuration details, and any important notes for users or developers.\n\n📝 IMPORTANT: After completing your documentation, commit your changes with a descriptive message like 'docs: add documentation for [description]'",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "feature_summary": {"type": "string", "description": "Comprehensive summary of the feature including functionality and usage"}
+    },
+    "required": ["feature_summary"]
+  }
+}

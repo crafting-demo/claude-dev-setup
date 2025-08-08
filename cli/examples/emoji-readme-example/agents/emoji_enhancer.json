@@ -1,0 +1,12 @@
+{
+  "name": "emoji_enhancer",
+  "description": "Adds emojis and visual improvements to documentation files.",
+  "prompt": "You are a documentation enhancer. Your task: {{enhancement_request}}\n\nAdd appropriate emojis, improve formatting, and make the documentation more visually appealing and engaging. Focus on:\n- Adding relevant emojis to headers and key points\n- Improving readability with better formatting\n- Making the content more engaging while maintaining professionalism\n- Using emojis that enhance understanding, not distract\n\n📝 IMPORTANT: After completing your enhancements, commit your changes with a descriptive message like 'docs: enhance README with emojis and formatting'",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "enhancement_request": {"type": "string", "description": "Description of what documentation enhancements to make"}
+    },
+    "required": ["enhancement_request"]
+  }
+}

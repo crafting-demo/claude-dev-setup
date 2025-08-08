@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Multi-Agent Inventory Export Example
-# Demonstrates a three-agent workflow: software_engineer → qa_analyst → documentation_writer
-# Task: Add 'Export Current Inventory to CSV' feature with GitHub PR
+# Emoji README Enhancement Example
+# Demonstrates a simple single-agent workflow using Claude Code automation
+# Task: Enhance README.md with emojis and better formatting
 
 set -e
 
@@ -11,7 +11,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CLI_PATH="$SCRIPT_DIR/../../cs-cc"
 REPO="crafting-test1/claude_test"
 BRANCH="main"
-SANDBOX_NAME="cs-cc-inv-ex"
+
+SANDBOX_NAME="cs-cc-emoji-ex"
 
 # Configuration files
 PROMPT_FILE="$SCRIPT_DIR/orchestration-prompt.txt"
@@ -42,11 +43,13 @@ fi
 # Check for required environment variables
 if [ -z "$GITHUB_TOKEN" ]; then
     echo "❌ Error: GITHUB_TOKEN environment variable is required"
+    echo "Usage: GITHUB_TOKEN=your_token_here ./run-example.sh"
     exit 1
 fi
 
 if [ -z "$ANTHROPIC_API_KEY" ]; then
     echo "❌ Error: ANTHROPIC_API_KEY environment variable is required"
+    echo "Usage: ANTHROPIC_API_KEY=your_key_here GITHUB_TOKEN=your_token_here ./run-example.sh"
     exit 1
 fi
 
@@ -56,6 +59,9 @@ $CLI_PATH \
   -r "$REPO" \
   -ght "$GITHUB_TOKEN" \
   -b "$BRANCH" \
+  -rp "working-repo" \
+  -pool "claude-dev-pool" \
+  -template "cc-pool-test-temp" \
   -ad "$AGENTS_DIR" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "$SANDBOX_NAME" \

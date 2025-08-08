@@ -25,7 +25,10 @@ The workflow involves three specialized agents that use **dynamic inputs** to bu
 
 - `run-example.sh` - Main script that executes the multi-agent workflow
 - `orchestration-prompt.txt` - Coordination instructions for the agents
-- `mcp-tools.json` - Configuration defining the three agent tools
+- `agents/` - Directory containing individual agent definitions:
+  - `front_end_engineer.json` - UI implementation agent
+  - `back_end_engineer.json` - API and server-side logic agent
+  - `documentation_writer.json` - Documentation creation agent
 - `tool-whitelist.json` - Allowed tools for the agents
 - `README.md` - This documentation file
 
@@ -60,8 +63,8 @@ The workflow involves three specialized agents that use **dynamic inputs** to bu
    - A persistent sandbox is created for inspection
 
 4. **Check the results:**
-   - Visit the GitHub repository to see the created pull request
-   - The PR will contain the implemented feature, tests, and documentation
+   - Visit the GitHub repository to see the created pull request (title will start with ✅ emoji)
+   - The PR will contain the implemented feature, tests, and documentation on a new feature branch
 
 ## What Happens
 
@@ -70,7 +73,8 @@ The workflow involves three specialized agents that use **dynamic inputs** to bu
 3. **Implementation** - Software engineer receives detailed task description and implements feature
 4. **Testing** - QA analyst receives implementation details and writes matching tests
 5. **Documentation** - Technical writer receives feature summary and creates comprehensive docs
-6. **GitHub Integration** - Changes are committed and a PR is created
+6. **Git Workflow** - Creates new branch, commits all changes, pushes to remote
+7. **GitHub Integration** - Uses `gh` CLI tool to create PR with ✅ emoji-prefixed title
 
 ### Dynamic Input Flow
 
@@ -85,14 +89,14 @@ This demonstrates true multi-agent collaboration where each agent's work informs
 ### Customizing the Workflow
 
 - **Target Repository**: Edit `REPO` variable in `run-example.sh`
-- **Agent Behavior**: Modify the prompts in `mcp-tools.json`
+- **Agent Behavior**: Modify the individual agent files in `agents/` directory
 - **Orchestration**: Update instructions in `orchestration-prompt.txt`
 - **Available Tools**: Adjust the whitelist in `tool-whitelist.json`
 
 ### Tool Whitelist
 
 The agents have access to these tools:
-- **MCP Agents**: `local_server___software_engineer`, `local_server___qa_analyst`, `local_server___documentation_writer`
+- **MCP Agents**: `local_server___front_end_engineer`, `local_server___back_end_engineer`, `local_server___documentation_writer`
 - **File Operations**: `Read`, `Write`, `Edit`, `LS`, `Grep`
 - **System Tools**: `Bash`, `Task`
 
@@ -123,6 +127,7 @@ The sandbox name is displayed in the script output.
 
 On success, you should see:
 - Real-time streaming of agent activities
-- A new pull request in the target repository
+- Complete Git workflow execution (branch creation, commits, push)
+- A new pull request in the target repository with ✅ emoji-prefixed title
 - Implemented CSV export feature with tests and documentation
 - Success message with sandbox and cleanup instructions 

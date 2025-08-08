@@ -28,6 +28,74 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Function to process agents directory into MCP tools format
+process_agents_directory() {
+    local agents_dir="$1"
+    local output_file="$2"
+    
+    print_status "Processing agents directory: $agents_dir"
+    
+    # Validate agents directory exists
+    if [ ! -d "$agents_dir" ]; then
+        print_error "Agents directory does not exist: $agents_dir"
+        return 1
+    fi
+    
+    # Find all JSON files in the agents directory
+    local json_files=$(find "$agents_dir" -name "*.json" -type f 2>/dev/null)
+    
+    if [ -z "$json_files" ]; then
+        print_warning "No JSON agent files found in directory: $agents_dir"
+        echo "[]" > "$output_file"
+        return 0
+    fi
+    
+    # Start building the JSON array
+    echo "[" > "$output_file"
+    local first_file=true
+    local agent_count=0
+    
+    # Process each JSON file
+    for json_file in $json_files; do
+        print_status "Processing agent file: $(basename "$json_file")"
+        
+        # Validate JSON format
+        if ! python3 -m json.tool "$json_file" >/dev/null 2>&1; then
+            print_error "Invalid JSON format in file: $json_file"
+            continue
+        fi
+        
+        # Validate required fields
+        local name=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('name', ''))" 2>/dev/null)
+        local description=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('description', ''))" 2>/dev/null)
+        local prompt=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('prompt', ''))" 2>/dev/null)
+        
+        if [ -z "$name" ] || [ -z "$description" ] || [ -z "$prompt" ]; then
+            print_error "Agent file missing required fields (name, description, prompt): $json_file"
+            continue
+        fi
+        
+        # Add comma separator if not first file
+        if [ "$first_file" = false ]; then
+            echo "," >> "$output_file"
+        fi
+        first_file=false
+        
+        # Add the agent JSON content (without surrounding array brackets)
+        cat "$json_file" >> "$output_file"
+        agent_count=$((agent_count + 1))
+        
+        print_status "Added agent: $name"
+    done
+    
+    # Close the JSON array
+    echo "" >> "$output_file"
+    echo "]" >> "$output_file"
+    
+    print_success "Processed $agent_count agent files into MCP tools format"
+    return 0
+}
+
 # Get the directory where this script is located
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -167,20 +235,15 @@ cd "$HOME/claude" || {
     exit 1
 }
 
-# Function to configure local MCP server if local tools are defined
+# Function to configure local MCP server if agents directory or local tools are defined
 configure_local_mcp_server() {
-    local local_mcp_file="$HOME/cmd/local_mcp_tools.txt"
+    local mcp_config_path="/home/owner/.mcp.json"
     
-    print_status "Current directory before MCP config: $(pwd)"
     print_status "Current user: $(whoami)"
+    print_status "Configuring centralized MCP config at: $mcp_config_path"
     
-    cd "$HOME/claude" || {
-        print_error "Could not change to claude workspace directory"
-        return 1
-    }
-    
-    print_status "Changed to directory: $(pwd)"
-    
+    # Check if we have local MCP tools (processed by cs-cc host-side)
+    local local_mcp_file="$HOME/cmd/local_mcp_tools.txt"
     if [ -f "$local_mcp_file" ]; then
         print_status "Found local MCP tools configuration, setting up local MCP server..."
         
@@ -194,21 +257,10 @@ configure_local_mcp_server() {
         # Ensure the MCP server path is owned by the current user
         sudo chown -R "$USER:$USER" "$HOME/claude/dev-worker/local_mcp_server" 2>/dev/null || true
         
-        # Change to the claude workspace directory where .mcp.json should be created
-        cd "$HOME/claude" || {
-            print_error "Could not change to claude workspace directory"
-            return 1
-        }
-        
-        print_status "Configuring MCP server in directory: $(pwd)"
-        
-        # Add local MCP server to Claude Code configuration
-        if claude mcp add local_server node "$mcp_server_path" --scope project 2>/dev/null; then
-            print_success "Local MCP server configured successfully"
-        else
-            print_warning "Failed to configure local MCP server, trying alternative approach..."
-            # Create .mcp.json manually if claude mcp add fails
-            cat > .mcp.json << EOF
+        print_status "Configuring centralized MCP server..."        
+        # Create .mcp.json directly at the centralized location
+        print_warning "Creating centralized MCP configuration..."
+        cat > "$mcp_config_path" << EOF
 {
   "mcpServers": {
     "local_server": {
@@ -220,23 +272,28 @@ configure_local_mcp_server() {
   }
 }
 EOF
-            # Ensure the config file is owned by the current user
-            chown "$USER:$USER" .mcp.json 2>/dev/null || true
-            print_success "Local MCP server configured via .mcp.json"
-        fi
+        # Ensure the config file is owned by the correct user
+        chown owner:owner "$mcp_config_path" 2>/dev/null || true
+        print_success "Local MCP server configured via centralized .mcp.json"
         
         # Verify the configuration was created
-        if [ -f ".mcp.json" ]; then
-            print_status "MCP configuration file created successfully:"
-            cat .mcp.json
+        if [ -f "$mcp_config_path" ]; then
+            print_status "Centralized MCP configuration file created successfully:"
+            cat "$mcp_config_path"
         else
-            print_warning "No .mcp.json file found after configuration attempt"
+            print_warning "No centralized .mcp.json file found after configuration attempt"
         fi
-        # After creating .mcp.json manually
-        chown owner:owner .mcp.json 2>/dev/null || true
-        print_status "Set .mcp.json ownership to owner:owner"
+        print_status "Set centralized .mcp.json ownership to owner:owner"
     else
         print_status "No local MCP tools configuration found, skipping local server setup"
+        # Create empty MCP config for consistency
+        cat > "$mcp_config_path" << EOF
+{
+  "mcpServers": {}
+}
+EOF
+        chown owner:owner "$mcp_config_path" 2>/dev/null || true
+        print_status "Created empty centralized MCP configuration"
     fi
 }
 
@@ -316,23 +373,38 @@ setup_prompt() {
     fi
 }
 
-# Execute MCP configuration steps
-print_status "Current directory before executing MCP config: $(pwd)"
-print_status "Current user: $(whoami)"
-configure_local_mcp_server
-configure_external_mcp_servers
-configure_tool_whitelist
-setup_prompt
+# Note: Agent directory processing is now done on the host side
+# Agents are processed into local_mcp_tools.txt by cs-cc before transfer
 
-# Verify MCP configuration
-print_status "Verifying MCP configuration..."
-if claude mcp list > /dev/null 2>&1; then
-    print_success "MCP configuration verification passed"
-    # Show configured servers
-    print_status "Configured MCP servers:"
-    claude mcp list 2>/dev/null || echo "  (No servers configured)"
+# Execute MCP configuration steps (skip if SKIP_INITIAL_MCP_CONFIG is set)
+if [ "$SKIP_INITIAL_MCP_CONFIG" != "true" ]; then
+    print_status "Current directory before executing MCP config: $(pwd)"
+    print_status "Current user: $(whoami)"
+    configure_local_mcp_server
+    configure_external_mcp_servers
+    configure_tool_whitelist
+    setup_prompt
 else
-    print_warning "MCP configuration verification failed, but installation may still work"
+    print_status "Skipping initial MCP configuration (will be done after agent aggregation)"
+    # Still do non-MCP setup
+    configure_external_mcp_servers
+    configure_tool_whitelist
+    setup_prompt
+fi
+
+# Verify MCP configuration (only if we did the initial setup)
+if [ "$SKIP_INITIAL_MCP_CONFIG" != "true" ]; then
+    print_status "Verifying MCP configuration..."
+    if claude mcp list > /dev/null 2>&1; then
+        print_success "MCP configuration verification passed"
+        # Show configured servers
+        print_status "Configured MCP servers:"
+        claude mcp list 2>/dev/null || echo "  (No servers configured)"
+    else
+        print_warning "MCP configuration verification failed, but installation may still work"
+    fi
+else
+    print_status "MCP verification deferred until after agent aggregation"
 fi
 
 # Final success message

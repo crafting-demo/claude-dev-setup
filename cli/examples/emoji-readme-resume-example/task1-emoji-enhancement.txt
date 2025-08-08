@@ -46,4 +46,4 @@ Once you have successfully enhanced the README with emojis and visual improvemen
 
 The pull request should clearly document the visual improvements made to help reviewers understand the enhancements.
 
-Begin enhancing the README with emojis and visual improvements. 
+Begin enhancing the README with emojis and visual improvements.

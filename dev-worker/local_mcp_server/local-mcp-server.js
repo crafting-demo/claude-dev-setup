@@ -7,7 +7,7 @@ import {
   CallToolRequestSchema
 } from "@modelcontextprotocol/sdk/types.js";
 import { readFileSync, existsSync, appendFileSync, writeFileSync } from "fs";
-import { execSync } from "child_process";
+import { execSync, spawn } from "child_process";
 import os from "os";
 import path from "path";
 
@@ -15,7 +15,7 @@ import path from "path";
 const LOG_FILE = path.join(os.homedir(), "cmd", "mcp-server-debug.log");
 const SESSION_STATE_FILE = path.join(os.homedir(), "cmd", "session-state.json");
 
-function mcpLog(message) {
+function mcpLog(message, level = 'info') {
   const timestamp = new Date().toISOString();
   const prefixedMessage = `[LOCAL-MCP] ${message}`;
   const logLine = `${timestamp} ${prefixedMessage}`;
@@ -208,57 +208,309 @@ class LocalMCPServer {
            prompt.includes('\\');
   }
 
+  // Execute Claude command with streaming JSON output and parse events in real-time
+  async executeStreamingClaude(claudeCommand, toolName) {
+    return new Promise((resolve, reject) => {
+      let finalResult = '';
+      let errorOutput = '';
+      let lastTextMessage = '';
+      let streamingEvents = []; // Accumulate streaming events for final result
+      
+      mcpLog(`Executing streaming command for ${toolName}`);
+      
+      // Parse the command to extract binary and arguments
+      const [command, ...args] = claudeCommand.split(' ');
+      
+      // Handle stdin piping for complex prompts
+      if (claudeCommand.includes('printf') && claudeCommand.includes('|')) {
+        // For stdin piping, we need to use shell execution
+        const child = spawn('sh', ['-c', claudeCommand], {
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        child.stdout.on('data', (data) => {
+          const lines = data.toString().split('\n');
+          lines.forEach(line => {
+            if (line.trim()) {
+              // Parse and capture the streaming event
+              const eventResult = this.parseSubagentStreamEvent(line.trim(), toolName);
+              
+              // If we got a formatted event message, add it to our accumulator
+              if (eventResult && eventResult.message) {
+                streamingEvents.push(eventResult.message);
+              }
+              
+              // Keep track of the last meaningful text response for the final result
+              if (eventResult && eventResult.textContent) {
+                lastTextMessage = eventResult.textContent;
+              }
+            }
+          });
+        });
+        
+        child.stderr.on('data', (data) => {
+          errorOutput += data.toString();
+          mcpLog(`[${toolName}] STDERR: ${data.toString().trim()}`);
+        });
+        
+        child.on('close', (code) => {
+          if (code === 0) {
+            // Include streaming events in the final result
+            let result = '';
+            if (streamingEvents.length > 0) {
+              result += '🔄 **Subagent Execution Log:**\n\n';
+              result += streamingEvents.join('\n') + '\n\n';
+            }
+            result += lastTextMessage || 'Task completed successfully';
+            resolve(result);
+          } else {
+            reject(new Error(`Command failed with exit code ${code}: ${errorOutput}`));
+          }
+        });
+        
+        child.on('error', (error) => {
+          reject(error);
+        });
+      } else {
+        // For direct argument passing
+        const child = spawn(command, args, {
+          stdio: ['pipe', 'pipe', 'pipe']
+        });
+        
+        child.stdout.on('data', (data) => {
+          const lines = data.toString().split('\n');
+          lines.forEach(line => {
+            if (line.trim()) {
+              // Parse and capture the streaming event
+              const eventResult = this.parseSubagentStreamEvent(line.trim(), toolName);
+              
+              // If we got a formatted event message, add it to our accumulator
+              if (eventResult && eventResult.message) {
+                streamingEvents.push(eventResult.message);
+              }
+              
+              // Keep track of the last meaningful text response for the final result
+              if (eventResult && eventResult.textContent) {
+                lastTextMessage = eventResult.textContent;
+              }
+            }
+          });
+        });
+        
+        child.stderr.on('data', (data) => {
+          errorOutput += data.toString();
+          mcpLog(`[${toolName}] STDERR: ${data.toString().trim()}`);
+        });
+        
+        child.on('close', (code) => {
+          if (code === 0) {
+            // Include streaming events in the final result
+            let result = '';
+            if (streamingEvents.length > 0) {
+              result += '🔄 **Subagent Execution Log:**\n\n';
+              result += streamingEvents.join('\n') + '\n\n';
+            }
+            result += lastTextMessage || 'Task completed successfully';
+            resolve(result);
+          } else {
+            reject(new Error(`Command failed with exit code ${code}: ${errorOutput}`));
+          }
+        });
+        
+        child.on('error', (error) => {
+          reject(error);
+        });
+      }
+    });
+  }
+
+  // Parse stream-json events from subagent Claude calls and return formatted messages
+  parseSubagentStreamEvent(line, toolName) {
+    try {
+      // Skip empty lines
+      if (!line.trim()) return null;
+      
+      // Try to parse as JSON
+      const event = JSON.parse(line);
+      const eventType = event.type || 'unknown';
+      const subtype = event.subtype || '';
+      
+      // Add subagent prefix to distinguish from main agent events
+      const prefix = `[SUBAGENT-${toolName.toUpperCase()}]`;
+      
+      // Route events based on type and format messages for accumulation
+      switch (eventType) {
+        case 'system':
+          if (subtype === 'init') {
+            const sessionId = event.session_id || 'unknown';
+            const model = event.model || 'unknown';
+            const mcpCount = event.mcp_servers ? event.mcp_servers.length : 0;
+            const logMessage = `${prefix} 🔧 Session initialized (ID: ${sessionId.substring(0, 8)}..., Model: ${model}, MCP: ${mcpCount})`;
+            mcpLog(logMessage);
+            return {
+              message: logMessage,
+              textContent: null
+            };
+          }
+          break;
+          
+        case 'assistant':
+          // Check if this contains a tool use
+          if (line.includes('"tool_use"')) {
+            try {
+              const toolUse = event.message?.content?.find(c => c.type === 'tool_use');
+              if (toolUse) {
+                const subToolName = toolUse.name || 'unknown';
+                if (subToolName.includes('mcp__')) {
+                  const logMessage = `${prefix} 🔧 Calling MCP tool: ${subToolName}`;
+                  mcpLog(logMessage);
+                  return {
+                    message: logMessage,
+                    textContent: null
+                  };
+                } else {
+                  const logMessage = `${prefix} 🔧 Calling tool: ${subToolName}`;
+                  mcpLog(logMessage);
+                  return {
+                    message: logMessage,
+                    textContent: null
+                  };
+                }
+              }
+            } catch (parseError) {
+              return {
+                message: `${prefix} 🔧 Tool call initiated`,
+                textContent: null
+              };
+            }
+          } else if (line.includes('"text"')) {
+            // Show meaningful text responses from subagent
+            try {
+              const textContent = event.message?.content?.find(c => c.type === 'text')?.text;
+              if (textContent && textContent.length > 0) {
+                // Show preview of subagent's reasoning/response
+                const preview = textContent.length > 100 ? 
+                  `${textContent.substring(0, 100)}...` : textContent;
+                const logMessage = `${prefix} 💭 ${preview}`;
+                mcpLog(logMessage);
+                return {
+                  message: logMessage,
+                  textContent: textContent
+                };
+              }
+            } catch (parseError) {
+              return {
+                message: `${prefix} 💭 Generating response...`,
+                textContent: null
+              };
+            }
+          }
+          break;
+          
+        case 'user':
+          // Tool results from subagent
+          if (line.includes('"tool_result"')) {
+            try {
+              const toolResult = event.message?.content?.find(c => c.type === 'tool_result');
+              if (toolResult) {
+                const isError = toolResult.is_error || false;
+                if (isError) {
+                  const errorMsg = toolResult.error || 'Unknown error';
+                  const logMessage = `${prefix} ❌ Tool failed: ${errorMsg}`;
+                  mcpLog(logMessage);
+                  return {
+                    message: logMessage,
+                    textContent: null
+                  };
+                } else {
+                  const logMessage = `${prefix} ✅ Tool completed`;
+                  mcpLog(logMessage);
+                  return {
+                    message: logMessage,
+                    textContent: null
+                  };
+                }
+              }
+            } catch (parseError) {
+              return {
+                message: `${prefix} ✅ Tool execution completed`,
+                textContent: null
+              };
+            }
+          }
+          break;
+          
+        case 'result':
+          const isError = event.is_error || false;
+          const duration = event.duration_ms || 0;
+          const turns = event.num_turns || 0;
+          const cost = event.total_cost_usd || 0;
+          
+          if (isError) {
+            const logMessage = `${prefix} ❌ Execution failed`;
+            mcpLog(logMessage);
+            return {
+              message: logMessage,
+              textContent: null
+            };
+          } else {
+            const logMessage = `${prefix} ✅ Completed (${duration}ms, ${turns} turns, $${cost})`;
+            mcpLog(logMessage);
+            return {
+              message: logMessage,
+              textContent: null
+            };
+          }
+          break;
+          
+        default:
+          // Skip unknown events to avoid noise
+          break;
+      }
+      
+      return null; // No meaningful content extracted
+    } catch (parseError) {
+      // Skip non-JSON lines (might be plain text output)
+      // Don't log parse errors as they're expected for mixed output
+      return null;
+    }
+  }
+
   loadToolDefinitions() {
     const configPath = path.join(os.homedir(), "cmd", "local_mcp_tools.txt");
     
-    mcpLog(`Looking for config at: ${configPath}`);
+          // Loading tool configuration
     
           if (!existsSync(configPath)) {
-        mcpLog(`Config file not found: ${configPath}`);
+        mcpLog(`Config file not found: ${configPath}`, 'warn');
         return;
       }
 
     try {
       const configContent = readFileSync(configPath, "utf-8");
-      mcpLog(`Raw config content: ${configContent.substring(0, 200)}...`);
+      // Parsing tool configuration
       
       // Handle both JSON format and simple text format
       let toolsConfig;
       try {
         toolsConfig = JSON.parse(configContent);
       } catch (parseError) {
-        mcpLog(`JSON parse error: ${parseError.message}`);
-        mcpLog("Using simple text format for tool definitions");
+        mcpLog(`JSON parse error: ${parseError.message}`, 'error');
         return;
       }
 
       // The config should be an array directly, not wrapped in a "tools" property
       if (Array.isArray(toolsConfig)) {
         this.tools = toolsConfig;
-        mcpLog(`Loaded ${this.tools.length} tool definitions from array format`);
-        
-        // Log tool names for debugging
-        this.tools.forEach(tool => {
-          mcpLog(`- ${tool.name}: ${tool.description || "No description"}`);
-        });
+        mcpLog(`Loaded ${this.tools.length} tools from array format`, 'startup');
       } else if (toolsConfig && toolsConfig.tools && Array.isArray(toolsConfig.tools)) {
         this.tools = toolsConfig.tools;
-        mcpLog(`Loaded ${this.tools.length} tool definitions from wrapped format`);
-        
-        // Log tool names for debugging
-        this.tools.forEach(tool => {
-          mcpLog(`- ${tool.name}: ${tool.description || "No description"}`);
-        });
+        mcpLog(`Loaded ${this.tools.length} tools from wrapped format`, 'startup');
               } else {
-          mcpLog("Invalid tool configuration format");
-          mcpLog(`Expected array or object with 'tools' property, got: ${typeof toolsConfig}`);
-          if (toolsConfig) {
-            mcpLog(`Config keys: ${Object.keys(toolsConfig)}`);
-          }
+          mcpLog(`Invalid tool config format: expected array or object with 'tools' property`, 'error');
         }
           } catch (error) {
-        mcpLog(`Error loading tool definitions: ${error.message}`);
-        mcpLog(`Stack trace: ${error.stack}`);
+        mcpLog(`Error loading tool definitions: ${error.message}`, 'error');
       }
   }
 
@@ -289,12 +541,8 @@ class LocalMCPServer {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
       
-      mcpLog(`=====================================`);
-      mcpLog(`🔧 TOOL CALL INITIATED: ${name}`);
-      mcpLog(`=====================================`);
-      mcpLog(`Arguments:`, JSON.stringify(args, null, 2));
-      mcpLog(`Available tools: ${this.tools.map(t => t.name).join(', ')}`);
-      mcpLog(`Timestamp: ${new Date().toISOString()}`);
+      // Tool call details now visible via stream-json, minimal logging needed
+      mcpLog(`Tool call: ${name}`);
       
       // Find the tool definition
       const tool = this.tools.find(t => t.name === name);
@@ -335,10 +583,7 @@ class LocalMCPServer {
   }
 
   async executeTool(tool, args) {
-    mcpLog(`=====================================`);
-    mcpLog(`executeTool called for: ${tool.name}`);
-    mcpLog(`Tool configuration:`, JSON.stringify(tool, null, 2));
-    mcpLog(`Arguments:`, JSON.stringify(args, null, 2));
+          // Detailed execution info now available via stream-json
     
     // Check for previous persistent session
     const previousSession = this.getToolSession(tool.name);
@@ -354,45 +599,42 @@ class LocalMCPServer {
       let prompt = tool.prompt;
       
       // Handle double-brace templating: {{parameter_name}}
-      mcpLog(`Processing template parameters...`);
-      mcpLog(`Available args:`, JSON.stringify(args, null, 2));
+              // Processing template with provided arguments
       
              // Replace {{parameter}} with values from args
        prompt = prompt.replace(/\{\{([^}]+)\}\}/g, (match, paramName) => {
          const paramValue = args[paramName];
          if (paramValue !== undefined) {
-           mcpLog(`Replacing {{${paramName}}} with: ${paramValue.substring(0, 100)}...`);
+           // Template parameter replaced
            return paramValue;
          } else {
-           mcpLog(`Warning: Parameter {{${paramName}}} not found in args, leaving as-is`);
+           mcpLog(`Warning: Missing parameter {{${paramName}}}`, 'warn');
            return match; // Leave the placeholder if parameter not found
          }
        });
       
-      mcpLog(`Using configured prompt template`);
-      mcpLog(`Original template: ${tool.prompt.substring(0, 200)}...`);
-      mcpLog(`Final prompt: ${prompt.substring(0, 200)}...`);
+      // Using configured prompt template
       
       // Check if we should use previous persistent session or start fresh
       if (previousSession && previousSession.sessionId) {
         // Change to the directory where the previous session was created
         const originalCwd = process.cwd();
         if (previousSession.workingDirectory !== originalCwd) {
-          mcpLog(`Changing directory from ${originalCwd} to ${previousSession.workingDirectory} for session resume`);
+          // Changing to session directory
           process.chdir(previousSession.workingDirectory);
         }
         
         // Create command with proper prompt handling
-        const baseCommand = `claude --resume ${previousSession.sessionId}`;
+        const baseCommand = `claude --resume ${previousSession.sessionId} --output-format stream-json --verbose`;
         claudeCommand = this.createPromptCommand(prompt, baseCommand);
         usingPreviousSession = true;
-        mcpLog(`Resuming persistent session ${previousSession.sessionId} for tool: ${tool.name}`);
+        // Resuming session
       } else {
         // Start new session 
-        const baseCommand = `claude`;
+        const baseCommand = `claude --output-format stream-json --verbose`;
         claudeCommand = this.createPromptCommand(prompt, baseCommand);
         this.sessions.set(tool.name, Date.now());
-        mcpLog(`Starting new session for tool: ${tool.name}`);
+        // Starting new session
       }
     } else {
       // Default behavior: try to extract meaningful content from args or fall back to input
@@ -424,40 +666,33 @@ class LocalMCPServer {
         // Change to the directory where the previous session was created
         const originalCwd = process.cwd();
         if (previousSession.workingDirectory !== originalCwd) {
-          mcpLog(`Changing directory from ${originalCwd} to ${previousSession.workingDirectory} for session resume`);
+          // Changing to session directory
           process.chdir(previousSession.workingDirectory);
         }
         
         // Create command with proper prompt handling
-        const baseCommand = `claude --resume ${previousSession.sessionId}`;
+        const baseCommand = `claude --resume ${previousSession.sessionId} --output-format stream-json --verbose`;
         claudeCommand = this.createPromptCommand(prompt, baseCommand);
         usingPreviousSession = true;
-        mcpLog(`Resuming persistent session ${previousSession.sessionId} for tool: ${tool.name}`);
+        // Resuming session
       } else {
-        const baseCommand = `claude`;
+        const baseCommand = `claude --output-format stream-json --verbose`;
         claudeCommand = this.createPromptCommand(prompt, baseCommand);
         this.sessions.set(tool.name, Date.now());
-        mcpLog(`Starting new session for tool: ${tool.name}`);
+        // Starting new session
       }
     }
 
-    mcpLog(`Final Claude command: ${claudeCommand}`);
-    
     try {
-      // Execute the Claude command
-      mcpLog(`Executing Claude command...`);
-      const result = execSync(claudeCommand, {
-        encoding: "utf-8",
-        timeout: 900000, // 15 minute timeout (increased from 5 minutes)
-        maxBuffer: 1024 * 1024 * 10 // 10MB buffer
-      });
+      // Execute Claude command with streaming JSON output for real-time visibility
+      const result = await this.executeStreamingClaude(claudeCommand, tool.name);
       
       // Save the session after successful execution (only if we're not using a previous session)
       if (!usingPreviousSession) {
-        mcpLog(`Saving new session for tool: ${tool.name}`);
+        // Saving new session
         this.saveToolSession(tool.name);
       } else {
-        mcpLog(`Updated existing session for tool: ${tool.name}`);
+        // Updated existing session
         // Update the lastUsed timestamp for the existing session
         const sessionState = this.getSessionState();
         if (sessionState[tool.name]) {
@@ -466,21 +701,13 @@ class LocalMCPServer {
         }
       }
       
-      mcpLog(`=====================================`);
-      mcpLog(`✅ TOOL CALL COMPLETED: ${tool.name}`);
-      mcpLog(`=====================================`);
-      mcpLog(`Raw result length: ${result.length} characters`);
-      mcpLog(`Result preview: ${result.substring(0, 300)}...`);
-      mcpLog(`Completed at: ${new Date().toISOString()}`);
+      // Tool completion now tracked via stream-json with subagent prefix
+      mcpLog(`Tool completed: ${tool.name}`);
       
       return result.trim();
       
           } catch (error) {
-        mcpLog(`Claude execution failed for tool ${tool.name}`);
-        mcpLog(`Command: ${claudeCommand}`);
-        mcpLog(`Error message: ${error.message}`);
-        mcpLog(`Error code: ${error.code}`);
-        mcpLog(`Error signal: ${error.signal}`);
+        mcpLog(`Tool execution failed: ${tool.name} - ${error.message}`, 'error');
         
         // Clean up session if there was an error
         this.sessions.delete(tool.name);
@@ -505,7 +732,7 @@ class LocalMCPServer {
   }
 
   async start() {
-    mcpLog("Starting local MCP server...");
+          mcpLog("Starting local MCP server...", 'startup');
     
     // Load initial tool definitions
     this.loadToolDefinitions();
@@ -516,18 +743,7 @@ class LocalMCPServer {
     // Connect the server
     await this.server.connect(transport);
     
-    mcpLog("=====================================");
-    mcpLog("🚀 LOCAL MCP SERVER READY");
-    mcpLog("=====================================");
-    mcpLog("Server started and listening on stdio");
-    mcpLog(`Serving ${this.tools.length} tools`);
-          if (this.tools.length > 0) {
-        mcpLog("Available tools:");
-        this.tools.forEach(tool => {
-          mcpLog(`  - ${tool.name}: ${tool.description || "No description"}`);
-        });
-      }
-    mcpLog("Waiting for tool calls...");
+          mcpLog(`🚀 MCP Server ready - ${this.tools.length} tools available`, 'startup');
   }
 }
 
@@ -537,7 +753,7 @@ async function main() {
     const server = new LocalMCPServer();
     await server.start();
   } catch (error) {
-    mcpLog(`Failed to start server: ${error.message}`);
+    mcpLog(`Failed to start server: ${error.message}`, 'error');
     process.exit(1);
   }
 }

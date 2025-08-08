@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync, statSync, readdirSync } from 'node:fs';
 import { exec } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, isAbsolute } from 'node:path';
+import { dirname, resolve, isAbsolute, join } from 'node:path';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -64,9 +64,9 @@ function parseArguments() {
           parsed.mc = value;
           i++;
           break;
-        case '-lmc':
-        case '--local-mcp-config':
-          parsed.lmc = value;
+        case '-ad':
+        case '--agents-dir':
+          parsed.ad = value;
           i++;
           break;
         case '-t':
@@ -93,6 +93,20 @@ function parseArguments() {
           parsed.debug = value;
           i++;
           break;
+        case '-rp':
+        case '--repo-path':
+          parsed.rp = value;
+          i++;
+          break;
+        case '--resume':
+          parsed.resume = value;
+          i++;
+          break;
+        case '-tid':
+        case '--task-id':
+          parsed.tid = value;
+          i++;
+          break;
         default:
           throw new Error(`Unknown option: ${arg}`);
       }
@@ -104,6 +118,10 @@ function parseArguments() {
         throw new Error(`Option ${arg} requires a value`);
       }
     } else {
+      // Skip empty arguments
+      if (arg.trim() === '') {
+        continue;
+      }
       throw new Error(`Unexpected positional argument: ${arg}`);
     }
   }
@@ -121,16 +139,18 @@ Options:
   -p, --prompt <value>           Prompt string or file path (required)
   -pool <name>                   Sandbox pool name (optional)
   -r, --repo <owner/repo>        GitHub repository (required for GitHub integration)
-  -ght, --github-token <token>   GitHub access token (required for GitHub integration)
+  -ght, --github-token <token>   GitHub access token (optional, defaults to Crafting credentials)
   -pr, --pull-request <number>   Pull request number (mutually exclusive with -i, -b)
   -i, --issue <number>           Issue number (mutually exclusive with -pr, -b)
   -b, --branch <name>            Branch name (mutually exclusive with -pr, -i)
   -mc, --mcp-config <value>      External MCP config string or file path (optional)
-  -lmc, --local-mcp-config <value> Local MCP tools config string or file path (optional)
+  -ad, --agents-dir <path>       Directory containing individual agent JSON files (optional)
   -t, --tools <value>            Tool whitelist string or file path (optional)
   -template, --template <value>  Custom template name (default: claude-code-automation)
   -d, --delete-when-done <yes|no> Delete sandbox when done (default: yes)
   -n, --name <name>              Sandbox name (default: auto-generated)
+  --resume <sandbox_name>        Resume existing sandbox with new task (skip creation)
+  -tid, --task-id <id>           Custom task ID (optional, auto-generated if not provided)
   --debug <yes|no>               Debug mode: wait for worker completion and show all output (default: no)
   --dry-run                      Validate parameters and show commands without execution
   --help                         Show this help message
@@ -138,9 +158,11 @@ Options:
 Examples:
   cs-cc -p "Fix the login bug" -r "owner/repo" -ght "ghp_token" -pr 123
   cs-cc -p prompt.txt -r "owner/repo" -ght "ghp_token" -i 456 -mc external_mcp.txt
-  cs-cc -p "Implement feature" -pool my-pool -lmc local_tools.txt -t tool_whitelist.txt
+  cs-cc -p "Fix bugs" -r "owner/repo" -ght "ghp_token" -pr 123 -ad ./agents
+  cs-cc -p "Implement feature" -pool my-pool -ad ./agents -t tool_whitelist.txt
   cs-cc -p "Debug workflow" -r "owner/repo" -ght "token" -b main --debug yes
   cs-cc -p "Custom workflow" -template my-template -r "owner/repo" -ght "token" -b main
+  cs-cc --resume my-sandbox -p "Follow-up task" -t new_tools.json -tid task-2
 `);
 }
 
@@ -159,6 +181,53 @@ function readFileOrString(value) {
   }
   
   return value;
+}
+
+function processAgentsDirectory(dirPath) {
+  if (!dirPath) return '';
+  
+  const resolvedPath = isAbsolute(dirPath) ? dirPath : resolve(process.cwd(), dirPath);
+  if (!existsSync(resolvedPath)) {
+    throw new Error(`Agents directory not found: ${resolvedPath}`);
+  }
+  
+  // Check if it's actually a directory
+  if (!statSync(resolvedPath).isDirectory()) {
+    throw new Error(`Path is not a directory: ${resolvedPath}`);
+  }
+  
+  // Read all .json files in the directory
+  const agentFiles = readdirSync(resolvedPath)
+    .filter(file => file.endsWith('.json'))
+    .map(file => join(resolvedPath, file));
+  
+  if (agentFiles.length === 0) {
+    console.log(`Warning: No JSON agent files found in directory: ${resolvedPath}`);
+    return '[]';
+  }
+  
+  console.log(`Processing ${agentFiles.length} agent files from ${resolvedPath}`);
+  
+  // Parse and combine all agent files into array
+  const agents = [];
+  for (const file of agentFiles) {
+    try {
+      const content = readFileSync(file, 'utf8');
+      const agent = JSON.parse(content);
+      
+      // Validate required fields
+      if (!agent.name || !agent.description || !agent.prompt) {
+        throw new Error(`Agent file missing required fields (name, description, prompt): ${file}`);
+      }
+      
+      agents.push(agent);
+      console.log(`Added agent: ${agent.name}`);
+    } catch (error) {
+      throw new Error(`Error processing agent file ${file}: ${error.message}`);
+    }
+  }
+  
+  return JSON.stringify(agents, null, 2);
 }
 
 function validateJsonContent(content, parameterName) {
@@ -182,26 +251,52 @@ function validateArgs(args) {
     errors.push('Prompt (-p) is required');
   }
   
-  // Validate mutually exclusive GitHub parameters
-  const githubParams = [args.pr, args.i, args.b].filter(Boolean);
-  if (githubParams.length > 1) {
-    errors.push('Only one of -pr, -i, or -b can be specified');
-  }
-  
-  // Validate GitHub integration parameters
-  if (args.r || args.ght || githubParams.length > 0) {
-    if (!args.r) {
-      errors.push('GitHub repo is required when using GitHub integration');
-    } else {
-      // Validate GitHub repository format (owner/repo)
-      const repoPattern = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
-      if (!repoPattern.test(args.r)) {
-        errors.push('Invalid repo format - must be in format owner/repo');
+  // Resume mode validation
+  if (args.resume) {
+    // In resume mode, validate sandbox name format
+    const sandboxPattern = /^[a-zA-Z0-9._-]+$/;
+    if (!sandboxPattern.test(args.resume)) {
+      errors.push('Invalid sandbox name format - must contain only letters, numbers, dots, hyphens, and underscores');
+    }
+    
+    // Resume mode has simplified requirements
+    // Skip GitHub integration validation since sandbox already exists
+    console.log('Resume mode detected - using simplified validation');
+    
+    // Basic sandbox existence check (simple validation)
+    // Note: This is a basic check - actual sandbox state will be validated by start-worker.sh
+    console.log(`Checking if sandbox '${args.resume}' is accessible...`);
+    
+    // Validate task ID if provided
+    if (args.tid) {
+      const taskIdPattern = /^[a-zA-Z0-9._-]+$/;
+      if (!taskIdPattern.test(args.tid)) {
+        errors.push('Invalid task ID format - must contain only letters, numbers, dots, hyphens, and underscores');
       }
     }
-    if (!args.ght) errors.push('GitHub token is required when using GitHub integration');
-    if (githubParams.length === 0) {
-      errors.push('One of -pr, -i, or -b must be specified when using GitHub integration');
+  } else {
+    // Normal mode validation - existing GitHub integration validation
+    // Validate mutually exclusive GitHub parameters
+    const githubParams = [args.pr, args.i, args.b].filter(Boolean);
+    if (githubParams.length > 1) {
+      errors.push('Only one of -pr, -i, or -b can be specified');
+    }
+    
+    // Validate GitHub integration parameters
+    if (args.r || args.ght || githubParams.length > 0) {
+      if (!args.r) {
+        errors.push('GitHub repo is required when using GitHub integration');
+      } else {
+        // Validate GitHub repository format (owner/repo)
+        const repoPattern = /^[a-zA-Z0-9._-]+\/[a-zA-Z0-9._-]+$/;
+        if (!repoPattern.test(args.r)) {
+          errors.push('Invalid repo format - must be in format owner/repo');
+        }
+      }
+      // GitHub token is now optional - will use Crafting credentials as fallback
+      if (githubParams.length === 0) {
+        errors.push('One of -pr, -i, or -b must be specified when using GitHub integration');
+      }
     }
   }
   
@@ -298,8 +393,12 @@ async function validateGitHubResources(args) {
     if (args.pr) {
       // Validate PR exists using gh CLI
       const result = await new Promise((resolve) => {
+        const env = { ...process.env };
+        if (args.ght) {
+          env.GITHUB_TOKEN = args.ght;
+        }
         const child = exec(`gh pr view ${args.pr} --repo ${repo}`, 
-          { timeout: 10000, env: { ...process.env, GITHUB_TOKEN: args.ght } });
+          { timeout: 10000, env });
         
         child.on('close', (code) => {
           resolve({ code });
@@ -316,8 +415,12 @@ async function validateGitHubResources(args) {
     } else if (args.i) {
       // Validate issue exists using gh CLI
       const result = await new Promise((resolve) => {
-        const child = exec(`GITHUB_TOKEN=${args.ght} gh issue view ${args.i} --repo ${repo} --json number`, 
-          { timeout: 10000 });
+        const env = { ...process.env };
+        if (args.ght) {
+          env.GITHUB_TOKEN = args.ght;
+        }
+        const child = exec(`gh issue view ${args.i} --repo ${repo} --json number`, 
+          { timeout: 10000, env });
         
         child.on('close', (code) => {
           resolve({ code });
@@ -334,8 +437,12 @@ async function validateGitHubResources(args) {
     } else if (args.b) {
       // Validate branch exists using gh CLI
       const result = await new Promise((resolve) => {
-        const child = exec(`GITHUB_TOKEN=${args.ght} gh api repos/${repo}/branches/${args.b} --jq .name`, 
-          { timeout: 10000 });
+        const env = { ...process.env };
+        if (args.ght) {
+          env.GITHUB_TOKEN = args.ght;
+        }
+        const child = exec(`gh api repos/${repo}/branches/${args.b} --jq .name`, 
+          { timeout: 10000, env });
         
         child.on('close', (code) => {
           resolve({ code });
@@ -364,18 +471,25 @@ async function createSandbox(args) {
     // Validate arguments
     validateArgs(args);
     
-    // Validate GitHub resources exist
-    await validateGitHubResources(args);
+    // Determine mode and sandbox name
+    const isResumeMode = !!args.resume;
+    let sandboxName;
+    
+    if (isResumeMode) {
+      sandboxName = args.resume;
+      console.log(`Resume mode: Using existing sandbox: ${sandboxName}`);
+    } else {
+      // Validate GitHub resources exist (only for new sandboxes)
+      await validateGitHubResources(args);
+      sandboxName = generateSandboxName(args);
+      console.log(`Creating sandbox: ${sandboxName}`);
+    }
     
     // Read file content for parameters that support files
     const prompt = readFileOrString(args.p);
     const mcpConfig = args.mc ? validateJsonContent(readFileOrString(args.mc), 'external MCP config (-mc)') : '';
-    const localMcpConfig = args.lmc ? validateJsonContent(readFileOrString(args.lmc), 'local MCP config (-lmc)') : '';
+    const agentsContent = args.ad ? processAgentsDirectory(args.ad) : '';
     const toolWhitelist = args.t ? validateJsonContent(readFileOrString(args.t), 'tool whitelist (-t)') : '';
-    
-    // Generate sandbox name
-    const sandboxName = generateSandboxName(args);
-    console.log(`Creating sandbox: ${sandboxName}`);
     
     // Build sandbox creation command
     const template = args.template || 'claude-code-automation';
@@ -390,9 +504,12 @@ async function createSandbox(args) {
     const envVars = [];
     
     // GitHub integration variables
-    if (args.r && args.ght) {
+    if (args.r) {
       envVars.push(`-D 'claude/env[GITHUB_REPO]=${args.r}'`);
-      envVars.push(`-D 'claude/env[GITHUB_TOKEN]=${args.ght}'`);
+      // Only set GITHUB_TOKEN if explicitly provided (otherwise use Crafting credentials)
+      if (args.ght) {
+        envVars.push(`-D 'claude/env[GITHUB_TOKEN]=${args.ght}'`);
+      }
       
       if (args.pr) {
         envVars.push(`-D 'claude/env[PR_NUMBER]=${args.pr}'`);
@@ -414,71 +531,98 @@ async function createSandbox(args) {
     const debugMode = args.debug && args.debug.toLowerCase() === 'yes' ? 'true' : 'false';
     envVars.push(`-D 'claude/env[DEBUG_MODE]=${debugMode}'`);
     
+    // Custom repo path variable
+    if (args.rp) {
+      envVars.push(`-D 'claude/env[CUSTOM_REPO_PATH]=${args.rp}'`);
+    }
+    
     // Add Anthropic API key
     envVars.push(`-D 'claude/env[ANTHROPIC_API_KEY]=\${secret:shared/anthropic-apikey-eng}'`);
+    
+    // Disable all GitHub CLI interactive prompts
+    envVars.push(`-D 'claude/env[GH_PROMPT_DISABLED]=1'`);
     
     if (envVars.length > 0) {
       cmd += ' \\\n  ' + envVars.join(' \\\n  ');
     }
     
-    console.log(`Executing sandbox creation command...`);
-    console.log(`Command: ${cmd}`);
-    
     // Check for dry-run mode
     if (args.dryRun) {
       console.log(`\n🔍 DRY RUN MODE - No actual sandbox creation or file transfers will occur\n`);
+      
+      if (isResumeMode) {
+        console.log(`Resume mode: Would use existing sandbox: ${sandboxName}`);
+      } else {
+        console.log(`Executing sandbox creation command...`);
+        console.log(`Command: ${cmd}`);
+      }
       
       // Show what files would be transferred
       console.log(`Files that would be transferred:`);
       console.log(`  📄 Prompt → /home/owner/cmd/prompt.txt`);
       if (mcpConfig) console.log(`  📄 External MCP config → /home/owner/cmd/external_mcp.txt`);
-      if (localMcpConfig) console.log(`  📄 Local MCP tools → /home/owner/cmd/local_mcp_tools.txt`);
+      if (agentsContent) console.log(`  📄 Processed agents → /home/owner/cmd/local_mcp_tools.txt`);
       if (toolWhitelist) console.log(`  📄 Tool whitelist → /home/owner/cmd/tool_whitelist.txt`);
       
-      console.log(`\n✅ Parameter validation successful. Command would execute: ${cmd}`);
-      console.log(`\n🚀 Dry run complete. Remove --dry-run flag to create actual sandbox.`);
+      console.log(`\n✅ Parameter validation successful.`);
+      console.log(`\n🚀 Dry run complete. Remove --dry-run flag to ${isResumeMode ? 'resume sandbox' : 'create actual sandbox'}.`);
       return;
     }
     
-    // Execute sandbox creation
-    await new Promise((resolve, reject) => {
-      const child = exec(cmd, { timeout: 120000 });
+    // Execute sandbox creation only if not in resume mode
+    if (!isResumeMode) {
+      console.log(`Executing sandbox creation command...`);
+      console.log(`Command: ${cmd}`);
       
-      child.stdout.on('data', (data) => {
-        process.stdout.write(data);
+      await new Promise((resolve, reject) => {
+        const child = exec(cmd, { timeout: 120000 });
+        
+        child.stdout.on('data', (data) => {
+          process.stdout.write(data);
+        });
+        
+        child.stderr.on('data', (data) => {
+          process.stderr.write(data);
+        });
+        
+        child.on('close', (code) => {
+          if (code === 0) {
+            console.log(`\nSandbox creation completed successfully`);
+            resolve({ code });
+          } else {
+            console.error(`\nSandbox creation failed with exit code: ${code}`);
+            reject(new Error(`Sandbox creation failed with exit code: ${code}`));
+          }
+        });
+        
+        child.on('error', (error) => {
+          console.error(`\nSandbox creation failed: ${error.message}`);
+          reject(error);
+        });
       });
-      
-      child.stderr.on('data', (data) => {
-        process.stderr.write(data);
-      });
-      
-      child.on('close', (code) => {
-        if (code === 0) {
-          console.log(`\nSandbox creation completed successfully`);
-          resolve({ code });
-        } else {
-          console.error(`\nSandbox creation failed with exit code: ${code}`);
-          reject(new Error(`Sandbox creation failed with exit code: ${code}`));
-        }
-      });
-      
-      child.on('error', (error) => {
-        console.error(`\nSandbox creation failed: ${error.message}`);
-        reject(error);
-      });
-    });
+    } else {
+      console.log(`Resume mode: Skipping sandbox creation, using existing sandbox: ${sandboxName}`);
+    }
     
     console.log(`Sandbox is ready, proceeding with file transfers...`);
     
+    // Generate task-specific file names for queue support
+    let promptFileName = 'prompt.txt';  // Default for initial task
+    if (isResumeMode) {
+      // In resume mode, generate numbered prompt file for task queue
+      // This will be handled by task state manager in start-worker.sh
+      promptFileName = 'prompt_new.txt';  // Temporary file for new task
+    }
+    
     // Transfer files to sandbox
-    await transferFile(prompt, sandboxName, '/home/owner/cmd/prompt.txt', 'prompt');
+    await transferFile(prompt, sandboxName, `/home/owner/cmd/${promptFileName}`, 'prompt');
     
     if (mcpConfig) {
       await transferFile(mcpConfig, sandboxName, '/home/owner/cmd/external_mcp.txt', 'external MCP config');
     }
     
-    if (localMcpConfig) {
-      await transferFile(localMcpConfig, sandboxName, '/home/owner/cmd/local_mcp_tools.txt', 'local MCP tools');
+    if (agentsContent) {
+      await transferFile(agentsContent, sandboxName, '/home/owner/cmd/local_mcp_tools.txt', 'processed agents');
     }
     
     if (toolWhitelist) {
@@ -490,6 +634,7 @@ async function createSandbox(args) {
     if (args.r) {
       await transferFile(args.r, sandboxName, '/home/owner/cmd/github_repo.txt', 'GitHub repo');
     }
+
     // Write GitHub token (avoid echoing token in logs)
     if (args.ght) {
       await transferFile(args.ght, sandboxName, '/home/owner/cmd/github_token.txt', 'GitHub token');
@@ -510,7 +655,21 @@ async function createSandbox(args) {
     }
     // END NEW SECTION
 
-    console.log(`\n🚀 Sandbox "${sandboxName}" created successfully with all configurations!`);
+    // BEGIN TASK MANAGEMENT SECTION: Transfer task state information
+    // Transfer task mode (resume vs create)
+    const taskMode = isResumeMode ? 'resume' : 'create';
+    await transferFile(taskMode, sandboxName, '/home/owner/cmd/task_mode.txt', 'task mode');
+    
+    // Transfer custom task ID if provided
+    if (args.tid) {
+      await transferFile(args.tid, sandboxName, '/home/owner/cmd/task_id.txt', 'custom task ID');
+    }
+    
+    // Transfer original prompt filename for reference
+    await transferFile(promptFileName, sandboxName, '/home/owner/cmd/prompt_filename.txt', 'prompt filename');
+    // END TASK MANAGEMENT SECTION
+
+    console.log(`\n🚀 Sandbox "${sandboxName}" ${isResumeMode ? 'resumed' : 'created'} successfully with all configurations!`);
     
     // If debug mode is enabled, execute the worker and wait for completion
     if (args.debug && args.debug.toLowerCase() === 'yes') {
