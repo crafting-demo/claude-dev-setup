@@ -252,7 +252,6 @@ EOF
     
     if [ $? -eq 0 ]; then
         print_success "Created task: $generated_id"
-        echo "$generated_id"
     else
         print_error "Failed to create task"
         return 1
