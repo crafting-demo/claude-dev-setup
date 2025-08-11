@@ -1467,18 +1467,19 @@ if [ -n "$CURRENT_TASK_ID" ]; then
     if ! "$SCRIPT_DIR/task-state-manager.sh" update "$CURRENT_TASK_ID" "completed" >/dev/null 2>&1; then
         # Suppress noisy warning when task is already completed/moved to history
         CURRENT_STATE_JSON=$("$SCRIPT_DIR/task-state-manager.sh" read 2>/dev/null || echo '{}')
-        already_completed=$(printf '%s' "$CURRENT_STATE_JSON" | python3 - << 'PY'
+        already_completed=$(printf '%s' "$CURRENT_STATE_JSON" | python3 - "$CURRENT_TASK_ID" << 'PY'
 import json,sys
 try:
     data=json.load(sys.stdin)
+    task_id = sys.argv[1] if len(sys.argv) > 1 else ""
     for t in data.get('history', []):
-        if t.get('status')=='completed' and t.get('id')==sys.argv[1]:
+        if t.get('status')=='completed' and t.get('id')==task_id:
             print('yes'); sys.exit(0)
     print('no')
 except Exception:
     print('no')
 PY
-"$CURRENT_TASK_ID")
+)
         if [ "$already_completed" = "yes" ]; then
             print_status "Task $CURRENT_TASK_ID already completed, skipping status update"
         else
