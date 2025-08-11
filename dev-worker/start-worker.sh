@@ -1610,6 +1610,23 @@ echo "  MCP Configuration: Applied from cs-cc parameters" >&2
 echo >&2
 print_success "🎉 Workflow completed successfully!"
 
+# Call completion script with task ID if available
+if [ -n "$CURRENT_TASK_ID" ]; then
+    COMPLETION_SCRIPT="/home/owner/completion.sh"
+    if [ -f "$COMPLETION_SCRIPT" ]; then
+        print_status "Calling completion script with task ID: $CURRENT_TASK_ID"
+        if bash "$COMPLETION_SCRIPT" "$CURRENT_TASK_ID"; then
+            print_success "Completion script executed successfully"
+        else
+            print_warning "Completion script failed (exit code: $?)"
+        fi
+    else
+        print_warning "Completion script not found at: $COMPLETION_SCRIPT"
+    fi
+else
+    print_status "No current task ID available - skipping completion script"
+fi
+
 # Cleanup logic based on SHOULD_DELETE environment variable
 if [ "$SHOULD_DELETE" = "true" ]; then
     print_status "Non-debug mode: Initiating sandbox cleanup..."
