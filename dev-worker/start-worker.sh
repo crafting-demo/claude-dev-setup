@@ -28,205 +28,39 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Function to process agents directory into MCP tools format
-process_agents_directory() {
-    local agents_dir="$1"
-    local output_file="$2"
-    local source_label="$3"  # Optional label for logging (e.g., "CLI" or "repository")
+
+
+
+
+# Function to detect and report project-level subagents in .claude/agents/ directory
+detect_project_subagents() {
+    local project_agents_dir=".claude/agents"
     
-    if [ -z "$source_label" ]; then
-        source_label="agents"
-    fi
+    print_status "Checking for project-level subagents..."
     
-    print_status "Processing $source_label agents directory: $agents_dir"
-    
-    # Validate agents directory exists
-    if [ ! -d "$agents_dir" ]; then
-        print_error "$source_label agents directory does not exist: $agents_dir"
-        return 1
-    fi
-    
-    # Find all JSON files in the agents directory
-    local json_files=$(find "$agents_dir" -name "*.json" -type f 2>/dev/null)
-    
-    if [ -z "$json_files" ]; then
-        print_warning "No JSON agent files found in $source_label directory: $agents_dir"
-        echo "[]" > "$output_file"
+    # Check if .claude/agents directory exists in current repo
+    if [ ! -d "$project_agents_dir" ]; then
+        print_status "No .claude/agents directory found in repository"
         return 0
     fi
     
-    # Start building the JSON array
-    echo "[" > "$output_file"
-    local first_file=true
-    local agent_count=0
+    # Find .md agent files in the .claude/agents directory
+    local agent_files=$(find "$project_agents_dir" -name "*.md" -type f 2>/dev/null)
     
-    # Process each JSON file
-    for json_file in $json_files; do
-        print_status "Processing $source_label agent file: $(basename "$json_file")"
-        
-        # Validate JSON format
-        if ! python3 -m json.tool "$json_file" >/dev/null 2>&1; then
-            print_error "Invalid JSON format in $source_label file: $json_file"
-            continue
-        fi
-        
-        # Validate required fields
-        local name=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('name', ''))" 2>/dev/null)
-        local description=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('description', ''))" 2>/dev/null)
-        local prompt=$(python3 -c "import json, sys; data=json.load(open('$json_file')); print(data.get('prompt', ''))" 2>/dev/null)
-        
-        if [ -z "$name" ] || [ -z "$description" ] || [ -z "$prompt" ]; then
-            print_error "$source_label agent file missing required fields (name, description, prompt): $json_file"
-            continue
-        fi
-        
-        # Add comma separator if not first file
-        if [ "$first_file" = false ]; then
-            echo "," >> "$output_file"
-        fi
-        first_file=false
-        
-        # Add the agent JSON content (without surrounding array brackets)
-        cat "$json_file" >> "$output_file"
-        agent_count=$((agent_count + 1))
-        
-        print_status "Added $source_label agent: $name"
-    done
-    
-    # Close the JSON array
-    echo "" >> "$output_file"
-    echo "]" >> "$output_file"
-    
-    print_success "Processed $agent_count $source_label agent files into MCP tools format"
-    return 0
-}
-
-# Function to aggregate agents from multiple sources into combined MCP tools
-aggregate_agent_sources() {
-    local cli_agents_file="$HOME/cmd/local_mcp_tools.txt"
-    local repo_agents_dir=""
-    local combined_output="$HOME/cmd/combined_mcp_tools.txt"
-    
-    # Determine repository agents directory based on CUSTOM_REPO_PATH
-    if [ -n "$CUSTOM_REPO_PATH" ]; then
-        repo_agents_dir="/home/owner/$CUSTOM_REPO_PATH/agents"
-    else
-        repo_agents_dir="/home/owner/claude/target-repo/agents"
+    if [ -z "$agent_files" ]; then
+        print_status "No .md agent files found in .claude/agents directory"
+        return 0
     fi
     
-    print_status "Aggregating agent sources..."
-    print_status "CLI agents file: $cli_agents_file"
-    print_status "Repository agents directory: $repo_agents_dir"
+    local agent_count=$(echo "$agent_files" | wc -l)
+    print_success "Found $agent_count project agent files in .claude/agents/"
+    print_status "Project agents:"
+    while IFS= read -r agent_file; do
+        local agent_name=$(basename "$agent_file" .md)
+        print_status "  - $agent_name"
+    done <<< "$agent_files"
+    print_status "Project agents will override user agents with same names"
     
-    # Initialize variables for tracking what we found
-    local has_cli_agents=false
-    local has_repo_agents=false
-    local cli_agents_content=""
-    local repo_agents_content=""
-    
-    # Check for CLI agents (processed by cs-cc host-side)
-    if [ -f "$cli_agents_file" ] && [ -s "$cli_agents_file" ]; then
-        print_status "Found CLI agents configuration"
-        cli_agents_content=$(cat "$cli_agents_file")
-        has_cli_agents=true
-    else
-        print_status "No CLI agents found"
-    fi
-    
-    # Check for repository agents
-    if [ -d "$repo_agents_dir" ]; then
-        print_status "Found repository agents directory, processing..."
-        local temp_repo_file="/tmp/repo_agents.json"
-        if process_agents_directory "$repo_agents_dir" "$temp_repo_file" "repository"; then
-            repo_agents_content=$(cat "$temp_repo_file")
-            rm -f "$temp_repo_file"
-            
-            # Check if we actually got any agents (not just empty array)
-            if [ "$repo_agents_content" != "[]" ] && [ -n "$repo_agents_content" ]; then
-                has_repo_agents=true
-                print_success "Repository agents processed successfully"
-            else
-                print_status "Repository agents directory exists but contains no valid agents"
-            fi
-        else
-            print_warning "Failed to process repository agents directory"
-        fi
-    else
-        print_status "No repository agents directory found at: $repo_agents_dir"
-    fi
-    
-    # Combine the agent sources with deduplication
-    if [ "$has_cli_agents" = true ] && [ "$has_repo_agents" = true ]; then
-        print_status "Combining CLI and repository agents with deduplication..."
-        
-        # Use a temporary Python script to properly merge and deduplicate JSON arrays
-        # Priority: CLI agents override repository agents with same name
-        cat > "/tmp/merge_agents.py" << 'EOF'
-import json
-import sys
-
-def merge_agents(cli_content, repo_content):
-    try:
-        cli_agents = json.loads(cli_content)
-        repo_agents = json.loads(repo_content)
-        
-        # Create a dictionary to track agents by name (CLI takes priority)
-        agents_dict = {}
-        
-        # Add repository agents first
-        for agent in repo_agents:
-            if 'name' in agent:
-                agents_dict[agent['name']] = agent
-        
-        # Add CLI agents (will override repo agents with same name)
-        for agent in cli_agents:
-            if 'name' in agent:
-                agents_dict[agent['name']] = agent
-                
-        # Convert back to list and output
-        merged_agents = list(agents_dict.values())
-        return json.dumps(merged_agents, indent=2)
-    except Exception as e:
-        print(f"Error merging agents: {e}", file=sys.stderr)
-        return cli_content  # Fallback to CLI agents only
-        
-if __name__ == "__main__":
-    cli_content = sys.argv[1]
-    repo_content = sys.argv[2]
-    print(merge_agents(cli_content, repo_content))
-EOF
-        
-        # Merge agents with deduplication
-        merged_content=$(python3 /tmp/merge_agents.py "$cli_agents_content" "$repo_agents_content" 2>/dev/null)
-        
-        if [ $? -eq 0 ] && [ -n "$merged_content" ]; then
-            echo "$merged_content" > "$combined_output"
-            print_success "Combined and deduplicated CLI and repository agents into: $combined_output"
-        else
-            print_warning "Agent deduplication failed, using CLI agents only"
-            echo "$cli_agents_content" > "$combined_output"
-        fi
-        
-        # Clean up temporary script
-        rm -f "/tmp/merge_agents.py"
-        
-    elif [ "$has_cli_agents" = true ]; then
-        print_status "Using CLI agents only"
-        cp "$cli_agents_file" "$combined_output"
-        
-    elif [ "$has_repo_agents" = true ]; then
-        print_status "Using repository agents only"
-        echo "$repo_agents_content" > "$combined_output"
-        
-    else
-        print_status "No agents found from any source, creating empty configuration"
-        echo "[]" > "$combined_output"
-    fi
-    
-    # Update the local_mcp_tools.txt to point to our combined file
-    cp "$combined_output" "$cli_agents_file"
-    
-    print_success "Agent aggregation completed. Combined agents available in: $cli_agents_file"
     return 0
 }
 
@@ -457,8 +291,8 @@ if [ -z "$GITHUB_BRANCH" ] && [ -f "$HOME/cmd/github_branch.txt" ]; then
     export GITHUB_BRANCH=$(cat "$HOME/cmd/github_branch.txt" 2>/dev/null || echo "main")
 fi
 
-# Note: Agent directory processing is now done on the host side
-# Agents are processed into local_mcp_tools.txt by cs-cc before transfer
+# Note: User agents are now processed by cs-cc and transferred to ~/.claude/agents/
+# Project agents are detected in the repository's .claude/agents/ directory
 
 # END REINTRODUCED SECTION
 
@@ -475,7 +309,7 @@ echo "LINE_NUMBER: $LINE_NUMBER" >&2
 echo "SHOULD_DELETE: $SHOULD_DELETE" >&2
 echo "SANDBOX_NAME: $SANDBOX_NAME" >&2
 echo "CUSTOM_REPO_PATH: $CUSTOM_REPO_PATH" >&2
-echo "AGENTS: $([ -f "$HOME/cmd/local_mcp_tools.txt" ] && echo "[processed by host]" || echo "[none]")" >&2
+echo "AGENTS: $([ -d "$HOME/.claude/agents" ] && echo "[user agents in ~/.claude/agents]" || echo "[none]")" >&2
 echo "ANTHROPIC_API_KEY: $([ -n "$ANTHROPIC_API_KEY" ] && echo "[set]" || echo "[not set]")" >&2
 
 # Validate required environment variables
@@ -659,168 +493,8 @@ fi
 
 print_success "Required tools check passed"
 
-# Start local MCP server if configured
-print_status "Starting MCP server lifecycle management..."
-
-# Function to start local MCP server
-start_local_mcp_server() {
-    # Prevent the entire worker from aborting if MCP server startup fails
-    # This function is best-effort: Claude Code can still work without a long-running
-    # background server because it will spawn the server on demand via `claude mcp`.
-    set +e  # Temporarily disable exit-on-error within this function
-    local local_mcp_config="$HOME/cmd/local_mcp_tools.txt"
-    local mcp_server_script="$HOME/claude/dev-worker/local_mcp_server/local-mcp-server.js"
-    
-    print_status "MCP Server startup - User: $(whoami), HOME: $HOME"
-    
-    if [ -f "$local_mcp_config" ] && [ -s "$local_mcp_config" ]; then
-        print_status "Local MCP tools configuration found, starting local MCP server..."
-        print_status "Config file: $local_mcp_config"
-        print_status "Server script: $mcp_server_script"
-        
-        if [ ! -f "$mcp_server_script" ]; then
-            print_warning "Local MCP server script not found at $mcp_server_script (continuing)"
-            set -e
-            return 0
-        fi
-        
-        # Ensure we're running as the owner user
-        if [ "$(whoami)" != "owner" ]; then
-            print_warning "Script not running as owner user, current user: $(whoami)"
-            # Try to switch to owner user for MCP operations
-            export HOME="/home/owner"
-            local_mcp_config="/home/owner/cmd/local_mcp_tools.txt"
-            mcp_server_script="/home/owner/claude/dev-worker/local_mcp_server/local-mcp-server.js"
-            print_status "Adjusted paths - Config: $local_mcp_config, Script: $mcp_server_script"
-        fi
-        
-        # Check if server is already running
-        if pgrep -f "local-mcp-server.js" > /dev/null; then
-            print_warning "Local MCP server already running, stopping previous instance"
-            pkill -f "local-mcp-server.js" || true
-            sleep 2
-        fi
-        
-        # Ensure MCP server directory and dependencies are ready
-        local mcp_server_dir="$(dirname "$mcp_server_script")"
-        if [ ! -d "$mcp_server_dir/node_modules" ]; then
-            print_status "Installing MCP server dependencies..."
-            cd "$mcp_server_dir"
-            npm install --silent || {
-                print_warning "Failed to install MCP server dependencies (continuing without local server)"
-                set -e
-                return 0
-            }
-        fi
-        
-        # Start the MCP server in background
-        print_status "Starting local MCP server at $mcp_server_script"
-        cd "$mcp_server_dir"
-        
-        # In debug mode, show MCP logs in real-time; otherwise redirect to file
-        if [ "$DEBUG_MODE" = "true" ]; then
-            print_status "Debug mode: Starting MCP server with real-time logging"
-            
-            # OPTION 1: Direct stdout integration (immediate, no file needed)
-            # This sends MCP logs directly to stdout with [MCP-DIRECT] prefix
-            print_status "🔧 Using direct stdout integration for immediate MCP visibility"
-            if [ "$(whoami)" = "owner" ]; then
-                node local-mcp-server.js 2>&1 | sed 's/^/[MCP-DIRECT] /' &
-            else
-                sudo -u owner node local-mcp-server.js 2>&1 | sed 's/^/[MCP-DIRECT] /' &
-            fi
-            MCP_SERVER_PID=$!
-            echo $MCP_SERVER_PID > "$HOME/cmd/mcp_server.pid"
-            print_status "✅ MCP server started with direct stdout integration"
-            sleep 2  # Give server time to start
-            
-            # OPTION 2: Also maintain file-based tailing as backup
-            # (Commented out to avoid duplicate logs, but can be enabled if needed)
-            # 
-            # # In debug mode, start server normally but also tail its log file in background
-            # if [ "$(whoami)" = "owner" ]; then
-            #     nohup node local-mcp-server.js > mcp-server.log 2>&1 &
-            # else
-            #     nohup sudo -u owner node local-mcp-server.js > mcp-server.log 2>&1 &
-            # fi
-            # MCP_SERVER_PID=$!
-            # 
-            # # Start log tailing process to show MCP logs in real-time
-            # sleep 2  # Give server more time to start and create log file
-            # 
-            # # Create log file if it doesn't exist
-            # if [ ! -f mcp-server.log ]; then
-            #     touch mcp-server.log
-            #     print_status "Created MCP server log file"
-            # fi
-            # 
-            # # Start robust log tailing with error handling
-            # print_status "🔧 Starting MCP log integration..."
-            # (
-            #     # Wait for log file to have content or timeout after 10 seconds
-            #     timeout=10
-            #     while [ ! -s mcp-server.log ] && [ $timeout -gt 0 ]; do
-            #         sleep 1
-            #         timeout=$((timeout - 1))
-            #     done
-            #     
-            #     if [ -s mcp-server.log ]; then
-            #         print_status "✅ MCP log file ready, starting real-time streaming"
-            #         tail -f mcp-server.log | while IFS= read -r line; do 
-            #             echo "[MCP-SERVER] $line"
-            #         done
-            #     else
-            #         print_warning "⚠️  MCP log file empty after timeout, starting tail anyway"
-            #         tail -f mcp-server.log | while IFS= read -r line; do 
-            #             echo "[MCP-SERVER] $line"
-            #         done
-            #     fi
-            # ) &
-            # MCP_LOG_PID=$!
-            # echo $MCP_LOG_PID > "$HOME/cmd/mcp_log.pid"
-            # print_status "🔧 MCP server logs will be prefixed with [MCP-SERVER] in real-time"
-        else
-            # Normal mode: redirect to log file
-            if [ "$(whoami)" = "owner" ]; then
-                nohup node local-mcp-server.js > mcp-server.log 2>&1 &
-            else
-                nohup sudo -u owner node local-mcp-server.js > mcp-server.log 2>&1 &
-            fi
-            MCP_SERVER_PID=$!
-        fi
-        
-        # Give the server a moment to start
-        sleep 3
-        
-        # Verify the server started successfully
-        if kill -0 $MCP_SERVER_PID 2>/dev/null; then
-            print_success "Local MCP server started successfully (PID: $MCP_SERVER_PID)"
-            echo $MCP_SERVER_PID > "$HOME/cmd/mcp_server.pid"
-            if [ "$DEBUG_MODE" = "true" ]; then
-                print_status "🔧 MCP server running - tool calls will appear with [MCP-SERVER] prefix"
-                print_status "   Look for: [LOCAL-MCP] 🔧 TOOL CALL INITIATED messages"
-            else
-                print_status "MCP server running - logs saved to mcp-server.log"
-            fi
-        else
-            print_warning "Local MCP server did not remain running (non-fatal)."
-            if [ "$DEBUG_MODE" != "true" ]; then
-                print_status "Recent server logs:"
-                tail -10 mcp-server.log 2>/dev/null || echo "No logs available"
-            fi
-        fi
-    else
-        print_status "No local MCP tools configuration found, skipping local MCP server startup"
-        print_status "Checked for: $local_mcp_config"
-        if [ -f "$local_mcp_config" ]; then
-            print_status "File exists but is empty ($(wc -c < "$local_mcp_config") bytes)"
-        fi
-    fi
-
-    # Re-enable exit-on-error for the rest of the script and always succeed
-    set -e
-    return 0
-}
+# Native subagent system - no additional setup needed
+print_status "Native subagent system active - ready for user and project agents"
 
 # Function to parse stream-json output from Claude
 parse_claude_stream_json() {
@@ -848,13 +522,13 @@ parse_claude_stream_json() {
                     if command -v jq >/dev/null 2>&1; then
                         session_id=$(echo "$line" | jq -r '.session_id // "unknown"')
                         model=$(echo "$line" | jq -r '.model // "unknown"')
-                        mcp_count=$(echo "$line" | jq -r '.mcp_servers | length // 0')
+                        subagent_count=$(echo "$line" | jq -r '.subagents | length // 0')
                     else
                         session_id="unknown"
                         model="unknown"
-                        mcp_count="unknown"
+                        subagent_count="unknown"
                     fi
-                    print_status "🔧 Claude session initialized (ID: ${session_id:0:8}..., Model: $model, MCP servers: $mcp_count)"
+                    print_status "🔧 Claude session initialized (ID: ${session_id:0:8}..., Model: $model, Subagents: $subagent_count)"
                     
                     # Persist session information for task resumption
                     if [ "$session_id" != "unknown" ] && [ "$session_id" != "null" ]; then
@@ -866,7 +540,7 @@ parse_claude_stream_json() {
 {
   "sessionId": "$session_id",
   "model": "$model",
-  "mcpServerCount": $mcp_count,
+                    "subagentCount": $subagent_count,
   "created": "$timestamp",
   "lastActive": "$timestamp",
   "status": "active"
@@ -904,11 +578,8 @@ EOF
                             tool_calls["$tool_id"]="$tool_name"
                             
                             # Format tool call message with input details
-                            if echo "$tool_name" | grep -q "mcp__"; then
-                                tool_prefix="[MCP-TOOL]"
-                            else
-                                tool_prefix="[TOOL]"
-                            fi
+                            # All tools are now native - subagents are handled transparently
+                            tool_prefix="[TOOL]"
                             
                             # Special handling for common tools to show relevant parameters
                             case "$tool_name" in
@@ -946,11 +617,7 @@ EOF
                             esac
                         fi
                     else
-                        if echo "$line" | grep -q "mcp__"; then
-                            print_status "[MCP-TOOL] 🔧 Tool call initiated"
-                        else
-                            print_status "[TOOL] 🔧 Tool call initiated"
-                        fi
+                        print_status "[TOOL] 🔧 Tool call initiated"
                     fi
                 elif echo "$line" | grep -q '"text"'; then
                     # This is a regular text response - show meaningful content
@@ -1015,36 +682,18 @@ EOF
                             
                             # Show tool result content if not empty
                             if [ -n "$result_content" ] && [ "$result_content" != "null" ] && [ "$result_content" != "" ]; then
-                                # Check if this is an MCP tool result that might contain subagent logs
-                                if echo "$tool_name" | grep -q "mcp__"; then
-                                    # MCP tools: show more content to capture subagent streaming events
-                                    if [ "$DEBUG_MODE" = "true" ]; then
-                                        if [ ${#result_content} -gt 2000 ]; then
-                                            print_status "[TOOL-OUTPUT] ${result_content:0:2000}... (${#result_content} chars total)"
-                                        else
-                                            print_status "[TOOL-OUTPUT] $result_content"
-                                        fi
+                                # Show tool result content with appropriate limits
+                                if [ "$DEBUG_MODE" = "true" ]; then
+                                    if [ ${#result_content} -gt 1000 ]; then
+                                        print_status "[TOOL-OUTPUT] ${result_content:0:1000}... (${#result_content} chars total)"
                                     else
-                                        if [ ${#result_content} -gt 1000 ]; then
-                                            print_status "[TOOL-OUTPUT] ${result_content:0:1000}... (${#result_content} chars)"
-                                        else
-                                            print_status "[TOOL-OUTPUT] $result_content"
-                                        fi
+                                        print_status "[TOOL-OUTPUT] $result_content"
                                     fi
                                 else
-                                    # Regular tools: use original limits
-                                    if [ "$DEBUG_MODE" = "true" ]; then
-                                        if [ ${#result_content} -gt 500 ]; then
-                                            print_status "[TOOL-OUTPUT] ${result_content:0:500}... (${#result_content} chars total)"
-                                        else
-                                            print_status "[TOOL-OUTPUT] $result_content"
-                                        fi
+                                    if [ ${#result_content} -gt 300 ]; then
+                                        print_status "[TOOL-OUTPUT] ${result_content:0:300}... (${#result_content} chars)"
                                     else
-                                        if [ ${#result_content} -gt 200 ]; then
-                                            print_status "[TOOL-OUTPUT] ${result_content:0:200}... (${#result_content} chars)"
-                                        else
-                                            print_status "[TOOL-OUTPUT] $result_content"
-                                        fi
+                                        print_status "[TOOL-OUTPUT] $result_content"
                                     fi
                                 fi
                             fi
@@ -1084,79 +733,22 @@ EOF
     done
 }
 
-# Function to setup cleanup trap for MCP server
-setup_mcp_cleanup() {
-    # Function to cleanup MCP server on exit
-    cleanup_mcp_server() {
-        if [ -f "$HOME/cmd/mcp_server.pid" ]; then
-            local pid=$(cat "$HOME/cmd/mcp_server.pid")
-            print_status "Cleaning up MCP server (PID: $pid)..."
-            if kill -0 "$pid" 2>/dev/null; then
-                kill "$pid" 2>/dev/null || true
-                sleep 2
-                # Force kill if still running
-                kill -9 "$pid" 2>/dev/null || true
-            fi
-            rm -f "$HOME/cmd/mcp_server.pid"
-            print_success "MCP server cleanup completed"
-        fi
-        
-        # Clean up MCP log tail process if running in debug mode
-        if [ -f "$HOME/cmd/mcp_log_tail.pid" ]; then
-            local log_pid=$(cat "$HOME/cmd/mcp_log_tail.pid")
-            print_status "Cleaning up MCP log tail process (PID: $log_pid)..."
-            if kill -0 "$log_pid" 2>/dev/null; then
-                kill "$log_pid" 2>/dev/null || true
-                sleep 1
-                kill -9 "$log_pid" 2>/dev/null || true
-            fi
-            rm -f "$HOME/cmd/mcp_log_tail.pid"
-            print_success "MCP log tail process cleanup completed"
-        fi
-        
-        # Ensure cleanup always succeeds to prevent script exit code issues
-        return 0
-    }
-    
-    # Set trap to cleanup on script exit
-    trap cleanup_mcp_server EXIT
-}
 
-# Execute MCP server management
-setup_mcp_cleanup
 
-# Debug mode status and MCP log tailing setup
+# Debug mode status
 if [ "$DEBUG_MODE" = "true" ]; then
-    print_status "🐛 DEBUG MODE ENABLED - Real-time Claude event streaming with enhanced MCP visibility"
-    print_status "   Tool calls, MCP interactions, and performance metrics will be shown in real-time"
-    
-    # Set up MCP log file tailing (server will create log when Claude starts it)
-    MCP_DEBUG_LOG="$HOME/cmd/mcp-server-debug.log"
-    print_status "🔧 Setting up MCP debug log monitoring at: $MCP_DEBUG_LOG"
-    
-    # Create empty log file and start tailing in background
-    touch "$MCP_DEBUG_LOG"
-    print_status "📋 Starting MCP log tail - subagent tool calls will appear with [MCP-LOG] prefix"
-    
-    # Start tailing the debug log that MCP server will write to
-    (tail -f "$MCP_DEBUG_LOG" | while IFS= read -r line; do 
-        echo "[MCP-LOG] $line"
-    done) &
-    MCP_LOG_PID=$!
-    echo $MCP_LOG_PID > "$HOME/cmd/mcp_log_tail.pid"
-    
-    print_status "✅ MCP debug log monitoring active (PID: $MCP_LOG_PID)"
-    print_status "   Look for: [MCP-LOG] [LOCAL-MCP] [SUBAGENT-*] messages for streaming events"
+    print_status "🐛 DEBUG MODE ENABLED - Real-time Claude event streaming"
+    print_status "   Tool calls and performance metrics will be shown in real-time"
 else
     print_status "📋 Normal mode - Claude events will be processed with stream-json for better reliability"
 fi
 
-# MCP server will be started on-demand by Claude Code
-print_status "🔧 MCP server will be started on-demand by Claude Code"
-print_status "   All tool calls and interactions will be captured via stream-json events"
+# Native subagent system - no additional server management needed
+print_status "🔧 Native subagent system active"
+print_status "   All subagent interactions will be captured via stream-json events"
 
-# Verify MCP configuration is ready
-print_status "Verifying MCP configuration readiness..."
+# Verify subagent configuration is ready
+print_status "Verifying subagent configuration readiness..."
 if [ -f "$HOME/cmd/external_mcp.txt" ]; then
     print_status "External MCP configuration available"
 fi
@@ -1166,7 +758,7 @@ if [ -f "$HOME/cmd/processed_tool_whitelist.txt" ]; then
     print_status "Tools available: $TOOL_COUNT"
 fi
 
-print_success "MCP server lifecycle management completed"
+print_success "Native subagent system and external MCP support ready"
 
 # Configure GitHub CLI
 print_status "Configuring GitHub CLI..."
@@ -1216,8 +808,8 @@ if [ "$TASK_MODE" = "resume" ]; then
         print_status "Resume mode: Using existing repository at $TARGET_REPO_DIR"
     fi
     
-    # Skip agent aggregation and MCP setup in resume mode - should already be configured
-    print_status "Resume mode: Skipping agent aggregation and MCP setup (using existing configuration)"
+    # Skip project subagent detection in resume mode - should already be detected
+    print_status "Resume mode: Skipping project subagent detection (using existing configuration)"
     
 else
     # Normal mode: full setup
@@ -1253,29 +845,37 @@ else
         print_success "Repository cloned successfully"
     fi
 
-    # Aggregate agents from CLI and repository sources before MCP setup
-    print_status "Aggregating agents from CLI and repository sources..."
-    aggregate_agent_sources
-
-    # Now configure MCP servers with the aggregated agents
-    print_status "Configuring MCP servers with aggregated agents..."
-    configure_local_mcp_server
+    # Detect project-level subagents in .claude/agents/ directory
+    detect_project_subagents
 fi
 
-# Verify MCP configuration now that we have the complete setup
-print_status "Verifying MCP configuration with aggregated agents..."
-if claude mcp list > /dev/null 2>&1; then
-    print_success "MCP configuration verification passed"
-    # Show configured servers
-    print_status "Configured MCP servers:"
-    claude mcp list 2>/dev/null || echo "  (No servers configured)"
-else
-    print_warning "MCP configuration verification failed, but installation may still work"
+# Verify subagent system and external MCP configuration
+print_status "Verifying native subagent system and external MCP configuration..."
+user_agents_count=0
+project_agents_count=0
+
+# Count user agents
+if [ -d "$HOME/.claude/agents" ]; then
+    user_agents_count=$(find "$HOME/.claude/agents" -name "*.md" -type f 2>/dev/null | wc -l)
 fi
 
-# MCP configuration is now centralized at /home/owner/.mcp.json
-# No need to copy or manage per-project MCP configs
-print_status "Using centralized MCP configuration at /home/owner/.mcp.json"
+# Count project agents
+if [ -d ".claude/agents" ]; then
+    project_agents_count=$(find ".claude/agents" -name "*.md" -type f 2>/dev/null | wc -l)
+fi
+
+# Check external MCP configuration
+external_mcp_servers=0
+if [ -f "/home/owner/.mcp.json" ]; then
+    if command -v jq >/dev/null 2>&1; then
+        external_mcp_servers=$(jq '.mcpServers | length' /home/owner/.mcp.json 2>/dev/null || echo "0")
+    fi
+fi
+
+print_status "User agents available: $user_agents_count"
+print_status "Project agents available: $project_agents_count"  
+print_status "External MCP servers configured: $external_mcp_servers"
+print_success "Native subagent system and external MCP verification completed"
 
 # Create .claude directory and settings.local.json for permissions
 mkdir -p .claude
@@ -1286,7 +886,7 @@ print_status "Configuring Claude permissions based on tool whitelist..."
 # Default available tools (used as fallback if no whitelist provided)
 # Reference list of all available Claude tools:
 # Built-in: Read, Write, Edit, MultiEdit, LS, Glob, Grep, Bash, Task, TodoRead, TodoWrite, NotebookRead, NotebookEdit, WebFetch, WebSearch
-# MCP tools: Will be added dynamically based on configured MCP servers
+# Subagent tools: Available through native Claude Code subagent system
 
 # Generate permissions using external script  
 PERMISSIONS_OUTPUT=$("$SCRIPT_DIR/generate_permissions_json.py" "$HOME/cmd/processed_tool_whitelist.txt" --format both 2>/dev/null)
@@ -1369,12 +969,24 @@ else
     exit 1
 fi
 
-# Test Claude MCP configuration
-print_status "Testing Claude MCP configuration..."
-if claude --mcp-config /home/owner/.mcp.json mcp list 2>&1; then
-    print_success "Claude MCP list command succeeded"
+# Test Claude subagent system and external MCP configuration
+print_status "Testing Claude subagent system and external MCP configuration..."
+if claude --version 2>&1; then
+    print_success "Claude version command succeeded - subagent system ready"
 else
-    print_warning "Claude MCP list command failed - MCP may not be properly configured"
+    print_warning "Claude command failed - subagent system may not be available"
+fi
+
+# Test external MCP configuration
+print_status "Testing external MCP configuration..."
+if [ -f "/home/owner/.mcp.json" ]; then
+    if claude --mcp-config /home/owner/.mcp.json mcp list 2>&1; then
+        print_success "External MCP configuration verified"
+    else
+        print_warning "External MCP configuration failed - may not have external servers"
+    fi
+else
+    print_status "No MCP configuration file - no external servers configured"
 fi
 
 # Test Claude Code with a simple hello command  
@@ -1607,7 +1219,7 @@ elif [ "$ACTION_TYPE" = "issue" ]; then
 elif [ "$ACTION_TYPE" = "branch" ]; then
     echo "  Target Branch: $GITHUB_BRANCH" >&2
 fi
-echo "  MCP Configuration: Applied from cs-cc parameters" >&2
+echo "  Subagent System: Native Claude Code subagents + external MCP support active" >&2
 echo >&2
 print_success "🎉 Workflow completed successfully!"
 

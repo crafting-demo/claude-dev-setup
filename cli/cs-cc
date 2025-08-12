@@ -20,6 +20,11 @@ function parseArguments() {
       continue;
     }
     
+    if (arg === '--dry-run') {
+      parsed.dryRun = true;
+      continue;
+    }
+    
     // Handle arguments that need values
     if (arg.startsWith('-') && i + 1 < args.length) {
       const value = args[i + 1];
@@ -111,12 +116,7 @@ function parseArguments() {
           throw new Error(`Unknown option: ${arg}`);
       }
     } else if (arg.startsWith('-')) {
-      // Special case for dry-run flag that doesn't need a value
-      if (arg === '--dry-run') {
-        parsed.dryRun = true;
-      } else {
-        throw new Error(`Option ${arg} requires a value`);
-      }
+      throw new Error(`Option ${arg} requires a value`);
     } else {
       // Skip empty arguments
       if (arg.trim() === '') {
@@ -183,8 +183,45 @@ function readFileOrString(value) {
   return value;
 }
 
+function parseYamlFrontmatter(content) {
+  const lines = content.split('\n');
+  if (lines[0] !== '---') {
+    return null; // No frontmatter
+  }
+  
+  let endIndex = -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (lines[i] === '---') {
+      endIndex = i;
+      break;
+    }
+  }
+  
+  if (endIndex === -1) {
+    return null; // No closing frontmatter
+  }
+  
+  const yamlContent = lines.slice(1, endIndex).join('\n');
+  const parsed = {};
+  
+  // Simple YAML parser for our specific needs
+  yamlContent.split('\n').forEach(line => {
+    const trimmed = line.trim();
+    if (trimmed && !trimmed.startsWith('#')) {
+      const colonIndex = trimmed.indexOf(':');
+      if (colonIndex > 0) {
+        const key = trimmed.substring(0, colonIndex).trim();
+        const value = trimmed.substring(colonIndex + 1).trim();
+        parsed[key] = value;
+      }
+    }
+  });
+  
+  return parsed;
+}
+
 function processAgentsDirectory(dirPath) {
-  if (!dirPath) return '';
+  if (!dirPath) return [];
   
   const resolvedPath = isAbsolute(dirPath) ? dirPath : resolve(process.cwd(), dirPath);
   if (!existsSync(resolvedPath)) {
@@ -196,38 +233,59 @@ function processAgentsDirectory(dirPath) {
     throw new Error(`Path is not a directory: ${resolvedPath}`);
   }
   
-  // Read all .json files in the directory
+  // Read all .md files in the directory
   const agentFiles = readdirSync(resolvedPath)
-    .filter(file => file.endsWith('.json'))
+    .filter(file => file.endsWith('.md'))
     .map(file => join(resolvedPath, file));
   
   if (agentFiles.length === 0) {
-    console.log(`Warning: No JSON agent files found in directory: ${resolvedPath}`);
-    return '[]';
+    console.log(`Warning: No .md agent files found in directory: ${resolvedPath}`);
+    return [];
   }
   
   console.log(`Processing ${agentFiles.length} agent files from ${resolvedPath}`);
   
-  // Parse and combine all agent files into array
-  const agents = [];
+  // Validate and collect agent files
+  const validatedAgents = [];
   for (const file of agentFiles) {
     try {
       const content = readFileSync(file, 'utf8');
-      const agent = JSON.parse(content);
+      const frontmatter = parseYamlFrontmatter(content);
       
-      // Validate required fields
-      if (!agent.name || !agent.description || !agent.prompt) {
-        throw new Error(`Agent file missing required fields (name, description, prompt): ${file}`);
+      if (!frontmatter) {
+        throw new Error(`No YAML frontmatter found in agent file: ${file}`);
       }
       
-      agents.push(agent);
-      console.log(`Added agent: ${agent.name}`);
+      // Validate required fields
+      if (!frontmatter.name || !frontmatter.description) {
+        throw new Error(`Agent file missing required fields (name, description): ${file}`);
+      }
+      
+      validatedAgents.push({
+        file: file,
+        name: frontmatter.name,
+        description: frontmatter.description,
+        content: content
+      });
+      
+      console.log(`Validated agent: ${frontmatter.name}`);
     } catch (error) {
       throw new Error(`Error processing agent file ${file}: ${error.message}`);
     }
   }
   
-  return JSON.stringify(agents, null, 2);
+  return validatedAgents;
+}
+
+function execCommand(cmd) {
+  return new Promise((resolve, reject) => {
+    const child = exec(cmd, { timeout: 30000 });
+    child.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`Command failed with exit code ${code}: ${cmd}`));
+    });
+    child.on('error', reject);
+  });
 }
 
 function validateJsonContent(content, parameterName) {
@@ -488,7 +546,7 @@ async function createSandbox(args) {
     // Read file content for parameters that support files
     const prompt = readFileOrString(args.p);
     const mcpConfig = args.mc ? validateJsonContent(readFileOrString(args.mc), 'external MCP config (-mc)') : '';
-    const agentsContent = args.ad ? processAgentsDirectory(args.ad) : '';
+    const userAgents = args.ad ? processAgentsDirectory(args.ad) : [];
     const toolWhitelist = args.t ? validateJsonContent(readFileOrString(args.t), 'tool whitelist (-t)') : '';
     
     // Build sandbox creation command
@@ -561,7 +619,10 @@ async function createSandbox(args) {
       console.log(`Files that would be transferred:`);
       console.log(`  📄 Prompt → /home/owner/cmd/prompt.txt`);
       if (mcpConfig) console.log(`  📄 External MCP config → /home/owner/cmd/external_mcp.txt`);
-      if (agentsContent) console.log(`  📄 Processed agents → /home/owner/cmd/local_mcp_tools.txt`);
+      if (userAgents.length > 0) {
+        console.log(`  👥 User agents → ~/.claude/agents/ (${userAgents.length} agents)`);
+        userAgents.forEach(agent => console.log(`    - ${agent.name}`));
+      }
       if (toolWhitelist) console.log(`  📄 Tool whitelist → /home/owner/cmd/tool_whitelist.txt`);
       
       console.log(`\n✅ Parameter validation successful.`);
@@ -621,8 +682,20 @@ async function createSandbox(args) {
       await transferFile(mcpConfig, sandboxName, '/home/owner/cmd/external_mcp.txt', 'external MCP config');
     }
     
-    if (agentsContent) {
-      await transferFile(agentsContent, sandboxName, '/home/owner/cmd/local_mcp_tools.txt', 'processed agents');
+    // Copy user agents to ~/.claude/agents/ directory
+    if (userAgents.length > 0) {
+      console.log(`📄 Transferring ${userAgents.length} user agents to ~/.claude/agents/...`);
+      
+      // Create ~/.claude/agents/ directory in sandbox
+      await execCommand(`cs exec -u 1000 -W ${sandboxName}/claude -- mkdir -p /home/owner/.claude/agents`);
+      
+      // Transfer each agent file
+      for (const agent of userAgents) {
+        const agentFileName = `${agent.name}.md`;
+        await transferFile(agent.content, sandboxName, `/home/owner/.claude/agents/${agentFileName}`, `user agent: ${agent.name}`);
+      }
+      
+      console.log(`✅ User agents transferred successfully`);
     }
     
     if (toolWhitelist) {
