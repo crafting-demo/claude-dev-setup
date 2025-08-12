@@ -10,9 +10,9 @@ This is a follow-up task to the initial emoji enhancement. Add professional badg
 - Ensure proper section hierarchy
 - Maintain the existing emoji enhancements from the previous task
 
-**AVAILABLE TOOLS:**
-- **badge_generator** - Specializes in creating professional badges for repositories
-- **structure_organizer** - Focuses on improving document structure and organization
+**AVAILABLE SUBAGENTS:**
+- **badge-generator** - Native subagent that specializes in creating professional badges for repositories
+- **structure-organizer** - Native subagent that focuses on improving document structure and organization
 
 **DELIVERABLES:**
 - Professional badges added to README
@@ -21,7 +21,7 @@ This is a follow-up task to the initial emoji enhancement. Add professional badg
 - Maintained visual appeal from previous emoji enhancements
 
 **APPROACH:**
-Use the badge_generator and structure_organizer tools to add professional elements and improve the overall structure while preserving the visual enhancements from the previous task.
+Use the badge-generator and structure-organizer subagents to add professional elements and improve the overall structure while preserving the visual enhancements from the previous task.
 
 **COMPLETION REQUIREMENTS:**
 Once you have successfully added badges and improved structure:

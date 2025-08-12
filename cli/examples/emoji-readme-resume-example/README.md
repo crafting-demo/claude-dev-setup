@@ -14,14 +14,14 @@ The example consists of two tasks that work together:
 
 ### Task 1: Emoji Enhancement
 - **Goal**: Enhance README.md with emojis and visual improvements
-- **Agent**: `emoji_enhancer`
-- **Tools**: Standard tools + emoji_enhancer MCP tool
+- **Subagent**: `emoji-enhancer` (native Claude Code subagent)
+- **Tools**: Standard tools (Read, Write, Edit, etc.)
 - **Action**: Creates initial sandbox and first task in queue
 
 ### Task 2: Badges and Structure  
 - **Goal**: Add professional badges and improve document structure
-- **Agents**: `badge_generator`, `structure_organizer`
-- **Tools**: Standard tools + badge_generator + structure_organizer MCP tools
+- **Subagents**: `badge-generator`, `structure-organizer` (native Claude Code subagents)
+- **Tools**: Standard tools (Read, Write, Edit, etc.)
 - **Action**: Resumes existing sandbox with different tool set
 
 ## Files Structure

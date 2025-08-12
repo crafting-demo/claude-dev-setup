@@ -1,5 +1,9 @@
 [
+  "Read",
+  "Write",
+  "Edit",
+  "LS",
+  "Grep", 
   "Bash",
-  "badge_generator",
-  "structure_organizer"
+  "Task"
 ]
