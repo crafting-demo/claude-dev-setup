@@ -1,6 +1,5 @@
 
-    [
-    "local_server___emoji_enhancer",
+[
     "Read",
     "Write", 
     "Edit",
@@ -8,4 +7,4 @@
     "Grep",
     "Bash",
     "Task"
-  ]
+]

@@ -10,8 +10,8 @@ Make the README.md more engaging and visually appealing by adding appropriate em
 - Make the content more engaging without being excessive
 - Keep it professional and appropriate for a technical audience
 
-**AVAILABLE TOOL:**
-- **emoji_enhancer** - Specializes in adding emojis and visual improvements to documentation
+**AVAILABLE SUBAGENT:**
+- **emoji-enhancer** - Native subagent that specializes in adding emojis and visual improvements to documentation
 
 **DELIVERABLES:**
 - Enhanced README.md with appropriate emojis
@@ -19,7 +19,7 @@ Make the README.md more engaging and visually appealing by adding appropriate em
 - Maintained technical accuracy and professionalism
 
 **APPROACH:**
-Use the emoji_enhancer tool to transform the existing README into a more visually appealing and engaging document. Focus on making it easier to scan and more inviting to read.
+Use the emoji-enhancer subagent to transform the existing README into a more visually appealing and engaging document. Focus on making it easier to scan and more inviting to read.
 
 **COMPLETION REQUIREMENTS:**
 Once you have successfully enhanced the README with emojis and visual improvements:
