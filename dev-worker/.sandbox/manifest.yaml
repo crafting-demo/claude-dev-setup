@@ -12,8 +12,14 @@ hooks:
 
       # Ensure PATH includes common install locations and user-local Go
       export PATH="$HOME/.local/go/bin:/usr/local/go/bin:/usr/local/node/bin:$PATH"
+      export PATH="$HOME/.npm-global/bin:$PATH"
       
       # Ensure owner user owns all files
       sudo chown -R owner:owner "$HOME/claude" || true
+      
+      # Ensure Claude CLI pinned version is installed
+      if [ -f "$HOME/claude/dev-worker/setup-claude.sh" ]; then
+        CLAUDE_CLI_VERSION=1.0.77 bash "$HOME/claude/dev-worker/setup-claude.sh" || echo "Warning: setup-claude.sh failed"
+      fi
       
       echo "Post-checkout hook completed"

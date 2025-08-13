@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/your-org/claude-dev-setup/pkg/config"
 	"github.com/your-org/claude-dev-setup/pkg/worker"
@@ -31,10 +32,35 @@ func main() {
 	// Load config to get GitHub context
 	cfg, cfgErr := config.LoadFromDir(cmdDir)
 	if cfgErr == nil {
+		// Hydrate env vars from cmd files if not already set (no logging of values)
+		if os.Getenv("GITHUB_TOKEN") == "" {
+			if b, err := os.ReadFile(filepath.Join(cmdDir, "github_token.txt")); err == nil {
+				os.Setenv("GITHUB_TOKEN", strings.TrimSpace(string(b)))
+			}
+		}
+		if os.Getenv("GITHUB_REPO") == "" && cfg.GitHub.Repo == "" {
+			if b, err := os.ReadFile(filepath.Join(cmdDir, "github_repo.txt")); err == nil {
+				os.Setenv("GITHUB_REPO", strings.TrimSpace(string(b)))
+			}
+		}
+		if os.Getenv("GITHUB_BRANCH") == "" && cfg.GitHub.Branch == "" {
+			if b, err := os.ReadFile(filepath.Join(cmdDir, "github_branch.txt")); err == nil {
+				os.Setenv("GITHUB_BRANCH", strings.TrimSpace(string(b)))
+			}
+		}
+
 		// Authenticate with GitHub if possible (token presence only logged elsewhere)
 		_ = worker.EnsureGitHubAuth()
 		// Prepare repository: clone if missing, checkout branch if provided
-		_ = worker.PrepareRepo(os.Getenv("HOME"), "", cfg.GitHub.Repo, cfg.GitHub.Branch)
+		repo := cfg.GitHub.Repo
+		if repo == "" {
+			repo = os.Getenv("GITHUB_REPO")
+		}
+		branch := cfg.GitHub.Branch
+		if branch == "" {
+			branch = os.Getenv("GITHUB_BRANCH")
+		}
+		_ = worker.PrepareRepo(os.Getenv("HOME"), "", repo, branch)
 	}
 
 	// Generate permissions for the repo if present
