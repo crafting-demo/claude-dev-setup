@@ -86,12 +86,12 @@ Replace `<sandbox_name>` with the name from Step 1. This resumes the existing sa
 
 ### Option 3: Manual cs-cc Commands
 
-#### Initial Task:
+#### Initial Task (Go CLI):
 ```bash
-../../cs-cc \
+go run ./cmd/cs-cc \
     -p task1-emoji-enhancement.txt \
     -r "crafting-test1/claude_test" \
-    -ght "your_github_token" \
+    --github-token "your_github_token" \
     -b main \
     -ad agents \
     -t tool-whitelist.json \
@@ -101,12 +101,12 @@ Replace `<sandbox_name>` with the name from Step 1. This resumes the existing sa
     --debug yes
 ```
 
-#### Follow-up Task:
+#### Follow-up Task (Go CLI):
 ```bash
-../../cs-cc \
+go run ./cmd/cs-cc \
     --resume "my-emoji-sandbox" \
     -p task2-badges-and-structure.txt \
-    -ght "your_github_token" \
+    --github-token "your_github_token" \
     -ad agents \
     -t task2-tools.json \
     -tid "badges-structure-task" \

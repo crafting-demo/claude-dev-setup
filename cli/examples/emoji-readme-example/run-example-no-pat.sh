@@ -9,7 +9,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_PATH="$SCRIPT_DIR/../../cs-cc"
+REPO_ROOT="$SCRIPT_DIR/../../.."
 REPO="crafting-test1/claude_test"
 BRANCH="main"
 
@@ -23,10 +23,6 @@ TOOL_WHITELIST_FILE="$SCRIPT_DIR/tool-whitelist.json"
 # Note: NO GITHUB_TOKEN - we will rely on Crafting credential defaults
 
 # Validate required files exist
-if [ ! -f "$CLI_PATH" ]; then
-    echo "❌ Error: cs-cc CLI not found at $CLI_PATH"
-    exit 1
-fi
 
 if [ ! -f "$PROMPT_FILE" ]; then
     echo "❌ Error: Orchestration prompt not found at $PROMPT_FILE"
@@ -65,8 +61,8 @@ echo "💡 Expected: The target repository should contain an /agents/ directory 
 echo "🔐 Expected: Crafting environment should provide GitHub credentials via wsenv"
 echo ""
 
-# Execute the cs-cc command WITHOUT -ght flag (testing Crafting credential fallback)
-$CLI_PATH \
+# Execute the cs-cc command WITHOUT -ght flag (Go CLI; testing Crafting credential fallback)
+(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
   -p "$PROMPT_FILE" \
   -r "$REPO" \
   -b "$BRANCH" \
@@ -76,7 +72,7 @@ $CLI_PATH \
   -t "$TOOL_WHITELIST_FILE" \
   -n "$SANDBOX_NAME" \
   -d no \
-  --debug yes
+  --debug yes)
 
 echo ""
 echo "✅ Emoji enhancement example completed with Crafting credentials!"

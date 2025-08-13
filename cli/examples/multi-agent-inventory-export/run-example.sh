@@ -8,7 +8,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_PATH="$SCRIPT_DIR/../../cs-cc"
+REPO_ROOT="$SCRIPT_DIR/../../.."
 REPO="crafting-test1/claude_test"
 BRANCH="main"
 SANDBOX_NAME="cs-cc-inv-ex"
@@ -19,11 +19,6 @@ AGENTS_DIR="$SCRIPT_DIR/agents"
 TOOL_WHITELIST_FILE="$SCRIPT_DIR/tool-whitelist.json"
 
 # Validate required files exist
-if [ ! -f "$CLI_PATH" ]; then
-    echo "❌ Error: cs-cc CLI not found at $CLI_PATH"
-    exit 1
-fi
-
 if [ ! -f "$PROMPT_FILE" ]; then
     echo "❌ Error: Orchestration prompt not found at $PROMPT_FILE"
     exit 1
@@ -50,14 +45,14 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
     exit 1
 fi
 
-# Execute the cs-cc command
-$CLI_PATH \
+# Execute the cs-cc command (Go CLI)
+(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
   -p "$PROMPT_FILE" \
   -r "$REPO" \
-  -ght "$GITHUB_TOKEN" \
+  --github-token "$GITHUB_TOKEN" \
   -b "$BRANCH" \
   -ad "$AGENTS_DIR" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "$SANDBOX_NAME" \
   -d no \
-  --debug yes 
+  --debug yes)

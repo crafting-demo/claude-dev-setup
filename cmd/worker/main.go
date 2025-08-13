@@ -33,6 +33,7 @@ func main() {
 	cfg, cfgErr := config.LoadFromDir(cmdDir)
 	if cfgErr == nil {
 		// Hydrate env vars from cmd files if not already set (no logging of values)
+		// Also reuse previously set GITHUB_TOKEN from environment (sandbox persists env between runs)
 		if os.Getenv("GITHUB_TOKEN") == "" {
 			if b, err := os.ReadFile(filepath.Join(cmdDir, "github_token.txt")); err == nil {
 				os.Setenv("GITHUB_TOKEN", strings.TrimSpace(string(b)))
@@ -51,7 +52,7 @@ func main() {
 
 		// Authenticate with GitHub if possible (token presence only logged elsewhere)
 		_ = worker.EnsureGitHubAuth()
-		// Prepare repository: clone if missing, checkout branch if provided
+		// Prepare repository only when we have repo/branch context
 		repo := cfg.GitHub.Repo
 		if repo == "" {
 			repo = os.Getenv("GITHUB_REPO")
@@ -60,7 +61,9 @@ func main() {
 		if branch == "" {
 			branch = os.Getenv("GITHUB_BRANCH")
 		}
-		_ = worker.PrepareRepo(os.Getenv("HOME"), "", repo, branch)
+		if repo != "" || branch != "" {
+			_ = worker.PrepareRepo(os.Getenv("HOME"), "", repo, branch)
+		}
 	}
 
 	// Generate permissions for the repo if present

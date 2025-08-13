@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 // EnsureGitHubAuth attempts a minimal auth check. If GITHUB_TOKEN is set, gh can use it via env.
@@ -18,26 +19,19 @@ func EnsureGitHubAuth() error {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token != "" {
 		login := exec.Command("gh", "auth", "login", "--with-token")
-		login.Stdin = bytesFromString(token)
+		login.Stdin = strings.NewReader(token + "\n")
+		// Ensure env carries token for gh and disable interactive git prompts
+		login.Env = append(os.Environ(), "GH_TOKEN="+token, "GIT_TERMINAL_PROMPT=0")
 		if err := login.Run(); err == nil {
-			// Configure git to use gh credentials
+			// Configure git to use gh credentials and verify
 			_ = exec.Command("gh", "auth", "setup-git").Run()
-			return nil
+			if err := exec.Command("gh", "auth", "status").Run(); err == nil {
+				return nil
+			}
 		}
 	}
 	// Fallback: return status error; caller may rely on workspace creds
 	return exec.Command("gh", "auth", "status").Run()
-}
-
-// bytesFromString returns a reader for the given string
-func bytesFromString(s string) *os.File {
-	// Create a temporary pipe to feed the token to gh
-	r, w, _ := os.Pipe()
-	go func() {
-		_, _ = w.Write([]byte(s))
-		_ = w.Close()
-	}()
-	return r
 }
 
 // PrepareRepo ensures the repository exists at repoDir. If missing, uses gh to clone githubRepo.

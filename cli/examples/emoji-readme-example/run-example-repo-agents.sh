@@ -8,7 +8,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_PATH="$SCRIPT_DIR/../../cs-cc"
+REPO_ROOT="$SCRIPT_DIR/../../.."
 REPO="crafting-test1/claude_test"
 BRANCH="main"
 
@@ -21,10 +21,6 @@ TOOL_WHITELIST_FILE="$SCRIPT_DIR/tool-whitelist.json"
 # Note: NO AGENTS_DIR - we will rely on repository agents detection
 
 # Validate required files exist
-if [ ! -f "$CLI_PATH" ]; then
-    echo "❌ Error: cs-cc CLI not found at $CLI_PATH"
-    exit 1
-fi
 
 if [ ! -f "$PROMPT_FILE" ]; then
     echo "❌ Error: Orchestration prompt not found at $PROMPT_FILE"
@@ -59,11 +55,11 @@ echo ""
 echo "💡 Expected: The target repository should contain an /agents/ directory with emoji_enhancer.json"
 echo ""
 
-# Execute the cs-cc command WITHOUT -ad flag
-$CLI_PATH \
+# Execute the cs-cc command WITHOUT -ad flag (Go CLI)
+(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
   -p "$PROMPT_FILE" \
   -r "$REPO" \
-  -ght "$GITHUB_TOKEN" \
+  --github-token "$GITHUB_TOKEN" \
   -b "$BRANCH" \
   -rp "working-repo" \
   -pool "claude-dev-pool" \
@@ -71,7 +67,7 @@ $CLI_PATH \
   -t "$TOOL_WHITELIST_FILE" \
   -n "$SANDBOX_NAME" \
   -d no \
-  --debug yes
+  --debug yes)
 
 echo ""
 echo "✅ Emoji enhancement example completed!"

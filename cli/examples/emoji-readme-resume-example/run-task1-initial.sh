@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_PATH="$SCRIPT_DIR/../../cs-cc"
+REPO_ROOT="$SCRIPT_DIR/../../.."
 REPO="crafting-test1/claude_test"
 BRANCH="main"
 
@@ -30,10 +30,6 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
 fi
 
 # Validate required files exist
-if [ ! -f "$CLI_PATH" ]; then
-    echo "❌ Error: cs-cc CLI not found at $CLI_PATH"
-    exit 1
-fi
 
 if [ ! -f "$TASK1_PROMPT" ]; then
     echo "❌ Error: Task 1 prompt not found at $TASK1_PROMPT"
@@ -62,21 +58,21 @@ echo ""
 SANDBOX_NAME="emoji-$(date +%m%d%H%M)"
 echo "📦 Sandbox name: $SANDBOX_NAME"
 
-# Execute cs-cc with task management for initial task
-echo "Executing initial task with cs-cc..."
-"$CLI_PATH" \
+# Execute cs-cc with task management for initial task (Go CLI)
+echo "Executing initial task with cs-cc (Go)..."
+(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
     -p "$TASK1_PROMPT" \
     -r "$REPO" \
-    -ght "$GITHUB_TOKEN" \
+    --github-token "$GITHUB_TOKEN" \
     -b "$BRANCH" \
     -ad "$AGENTS_DIR" \
     -t "$TOOL_WHITELIST" \
     -tid "emoji-enhancement-task" \
-    -pool "claude-dev-pool" \
-    -template "cc-pool-test-temp" \
+    --pool "claude-dev-pool" \
+    --template "cc-pool-test-temp" \
     -n "$SANDBOX_NAME" \
     -d no \
-    --debug yes
+    --debug yes)
 
 if [ $? -eq 0 ]; then
     echo ""

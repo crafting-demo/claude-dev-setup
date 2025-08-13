@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_PATH="$SCRIPT_DIR/../../cs-cc"
+REPO_ROOT="$SCRIPT_DIR/../../.."
 
 # Get sandbox name from command line argument
 SANDBOX_NAME="$1"
@@ -37,10 +37,6 @@ AGENTS_DIR="$SCRIPT_DIR/agents"
 TASK2_TOOLS="$SCRIPT_DIR/task2-tools.json"
 
 # Validate required files exist
-if [ ! -f "$CLI_PATH" ]; then
-    echo "❌ Error: cs-cc CLI not found at $CLI_PATH"
-    exit 1
-fi
 
 if [ ! -f "$TASK2_PROMPT" ]; then
     echo "❌ Error: Task 2 prompt not found at $TASK2_PROMPT"
@@ -69,14 +65,14 @@ echo "📊 Current task state:"
 (cd "$SCRIPT_DIR/../../.." && go run ./cmd/taskstate -state ~/state.json status) || echo "Could not read task state"
 echo ""
 
-# Execute cs-cc in resume mode with different tools
-echo "Executing follow-up task with cs-cc in resume mode..."
-"$CLI_PATH" \
+# Execute cs-cc in resume mode with different tools (Go CLI)
+echo "Executing follow-up task with cs-cc (Go) in resume mode..."
+(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
     --resume "$SANDBOX_NAME" \
     -p "$TASK2_PROMPT" \
     -t "$TASK2_TOOLS" \
     -tid "badges-structure-task" \
-    --debug yes
+    --debug yes)
 
 if [ $? -eq 0 ]; then
     echo ""
