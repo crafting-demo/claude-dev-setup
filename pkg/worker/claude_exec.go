@@ -4,16 +4,16 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 
-	"github.com/your-org/claude-dev-setup/pkg/claude"
 	"github.com/your-org/claude-dev-setup/pkg/taskstate"
 )
 
 // RunClaudeStream executes `claude` with stream-json, writes session.json when sessionId appears, and updates task state.
-func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager) error {
+func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager, debug bool) error {
 	if prompt == "" {
 		return errors.New("missing prompt")
 	}
@@ -33,21 +33,18 @@ func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager) error {
 		return err
 	}
 
-	reader := bufio.NewReader(stdout)
-	events, err := claude.ParseStream(reader)
-	if err != nil {
-		return err
-	}
-
+	scanner := bufio.NewScanner(stdout)
 	var sessionId string
-	for _, e := range events {
-		if e.Type == "system" {
-			// Try to extract session id if present
-			b, _ := json.Marshal(e.Data)
-			var m map[string]any
-			if json.Unmarshal(b, &m) == nil {
-				if v, ok := m["session_id"].(string); ok && v != "" {
-					sessionId = v
+	for scanner.Scan() {
+		line := scanner.Text()
+		if debug {
+			fmt.Printf("%s\n", line)
+		}
+		var m map[string]any
+		if json.Unmarshal([]byte(line), &m) == nil {
+			if typ, ok := m["type"].(string); ok && typ == "system" {
+				if sid, ok := m["session_id"].(string); ok && sid != "" {
+					sessionId = sid
 				}
 			}
 		}
@@ -66,5 +63,8 @@ func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager) error {
 		return err
 	}
 
+	if err := scanner.Err(); err != nil {
+		return err
+	}
 	return cmd.Wait()
 }

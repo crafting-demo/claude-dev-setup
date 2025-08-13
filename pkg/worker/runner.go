@@ -70,7 +70,8 @@ func (r *Runner) Run(cmdDir, statePath, sessionPath string) error {
 
 	// Execute Claude stream-json minimally to produce session.json and complete current
 	if st := mgr.GetState(); st.Current != nil && prompt != "" {
-		if err := RunClaudeStream(os.Getenv("HOME"), prompt, mgr); err != nil {
+		debug := os.Getenv("DEBUG_MODE") == "true"
+		if err := RunClaudeStream(os.Getenv("HOME"), prompt, mgr, debug); err != nil {
 			// If Claude is unavailable in unit tests, fall back to completing current
 			mgr.CompleteCurrent("done")
 		}
