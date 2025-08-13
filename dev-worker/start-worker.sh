@@ -76,9 +76,9 @@ if [ "${USE_GO_WORKER:-true}" = "true" ]; then
         bash "$SCRIPT_DIR/setup-go.sh"
     fi
     if command -v go >/dev/null 2>&1; then
-        if [ -d "$HOME/claude-dev-setup" ]; then
+        if [ -d "$HOME/claude" ]; then
             print_status "Attempting Go worker path..."
-            if (cd "$HOME/claude-dev-setup" && go run ./cmd/worker); then
+            if (cd "$HOME/claude" && go run ./cmd/worker); then
                 print_success "Go worker completed"
                 exit 0
             else
