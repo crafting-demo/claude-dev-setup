@@ -2,12 +2,14 @@ package worker
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"unicode/utf8"
 
 	"github.com/your-org/claude-dev-setup/pkg/taskstate"
 )
@@ -37,15 +39,26 @@ func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager, debug boo
 	var sessionId string
 	for scanner.Scan() {
 		line := scanner.Text()
-		if debug {
-			fmt.Printf("%s\n", line)
-		}
-		var m map[string]any
-		if json.Unmarshal([]byte(line), &m) == nil {
-			if typ, ok := m["type"].(string); ok && typ == "system" {
-				if sid, ok := m["session_id"].(string); ok && sid != "" {
-					sessionId = sid
+		var obj any
+		if err := json.Unmarshal([]byte(line), &obj); err == nil {
+			// Extract session id from system events
+			if m, ok := obj.(map[string]any); ok {
+				if typ, ok := m["type"].(string); ok && typ == "system" {
+					if sid, ok := m["session_id"].(string); ok && sid != "" {
+						sessionId = sid
+					}
 				}
+			}
+			if debug {
+				// Truncate long strings and pretty print
+				trimmed := truncateLongStrings(obj, 400)
+				pretty := mustPrettyJSON(trimmed)
+				fmt.Printf("%s\n", pretty)
+			}
+		} else {
+			// Not JSON – print raw when in debug
+			if debug {
+				fmt.Printf("%s\n", line)
 			}
 		}
 	}
@@ -67,4 +80,50 @@ func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager, debug boo
 		return err
 	}
 	return cmd.Wait()
+}
+
+// truncateLongStrings walks an arbitrary JSON-like structure and truncates long string values.
+func truncateLongStrings(v any, max int) any {
+	switch t := v.(type) {
+	case string:
+		if utf8.RuneCountInString(t) > max {
+			// Ensure we do not cut in the middle of a rune
+			rs := []rune(t)
+			if len(rs) > max {
+				return string(rs[:max]) + "… (truncated)"
+			}
+		}
+		return t
+	case []any:
+		out := make([]any, len(t))
+		for i := range t {
+			out[i] = truncateLongStrings(t[i], max)
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(t))
+		for k, val := range t {
+			out[k] = truncateLongStrings(val, max)
+		}
+		return out
+	default:
+		return v
+	}
+}
+
+func mustPrettyJSON(v any) string {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err == nil {
+		return string(b)
+	}
+	// Fallback best-effort: try to indent raw bytes if already JSON
+	if bb, ok := v.([]byte); ok {
+		var buf bytes.Buffer
+		if json.Indent(&buf, bb, "", "  ") == nil {
+			return buf.String()
+		}
+		return string(bb)
+	}
+	// Last resort: string format
+	return fmt.Sprintf("%v", v)
 }

@@ -36,6 +36,7 @@ func TestRunner_Run_StartsNextAndLinksSession(t *testing.T) {
 	}
 
 	r := NewRunner()
+	t.Setenv("DEBUG_MODE", "false")
 	if err := r.Run(cmdDir, statePath, sessPath); err != nil {
 		t.Fatalf("run: %v", err)
 	}
