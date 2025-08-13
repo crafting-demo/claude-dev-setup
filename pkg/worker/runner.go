@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/your-org/claude-dev-setup/pkg/config"
 	"github.com/your-org/claude-dev-setup/pkg/taskstate"
@@ -42,10 +43,12 @@ func (r *Runner) Run(cmdDir, statePath, sessionPath string) error {
 		return fmt.Errorf("load state: %w", err)
 	}
 
-	// Start next if none
+	// Start next if none; if queue empty and we have a prompt, enqueue a task in create mode
 	st := mgr.GetState()
-	if st.Current == nil && len(st.Queue) > 0 {
-		mgr.StartNext()
+	if st.Current == nil {
+		if len(st.Queue) > 0 {
+			mgr.StartNext()
+		}
 	}
 
 	// Link session if available
@@ -66,6 +69,15 @@ func (r *Runner) Run(cmdDir, statePath, sessionPath string) error {
 		if b, e := os.ReadFile(p); e == nil {
 			prompt = string(b)
 		}
+	}
+
+	// If no current task and we have a prompt, enqueue and start
+	st = mgr.GetState()
+	if st.Current == nil && prompt != "" {
+		// generate simple ID
+		id := fmt.Sprintf("task-%d", time.Now().Unix())
+		mgr.Enqueue(taskstate.Task{ID: id})
+		mgr.StartNext()
 	}
 
 	// Execute Claude stream-json minimally to produce session.json and complete current
