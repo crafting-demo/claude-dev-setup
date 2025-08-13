@@ -66,7 +66,7 @@ echo ""
 
 # Check current task state
 echo "📊 Current task state:"
-"$SCRIPT_DIR/../../../dev-worker/task-state-manager.sh" status || echo "Could not read task state"
+(cd "$SCRIPT_DIR/../../.." && go run ./cmd/taskstate -state ~/state.json status) || echo "Could not read task state"
 echo ""
 
 # Execute cs-cc in resume mode with different tools
@@ -82,7 +82,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "✅ Task 2 completed successfully!"
     echo "📊 Final task state:"
-    "$SCRIPT_DIR/../../../dev-worker/task-state-manager.sh" status || echo "Could not read task state"
+    (cd "$SCRIPT_DIR/../../.." && go run ./cmd/taskstate -state ~/state.json status) || echo "Could not read task state"
     echo ""
     echo "🎉 Multi-task workflow demonstration complete!"
     echo "📦 Sandbox: $SANDBOX_NAME"

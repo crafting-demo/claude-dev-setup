@@ -122,7 +122,7 @@ Replace `<sandbox_name>` with the name from Step 1. This resumes the existing sa
 
 ### 📋 Task Queue Management
 - Tasks are tracked in `~/state.json`
-- Queue status can be checked with `task-state-manager.sh status`
+- Queue status can be checked with `go run ./cmd/taskstate -state ~/state.json status`
 - Automatic progression through pending tasks
 
 ### 🔧 Dynamic Tool Updates
@@ -137,16 +137,16 @@ Replace `<sandbox_name>` with the name from Step 1. This resumes the existing sa
 
 ## Debugging and Monitoring
 
-### Check Task State
+### Check Task State (Go CLI)
 ```bash
 # View current task queue status
-../../../dev-worker/task-state-manager.sh status
+go run ./cmd/taskstate -state ~/state.json status
 
 # View complete state file
-../../../dev-worker/task-state-manager.sh read
+go run ./cmd/taskstate -state ~/state.json read
 
 # View current task details
-../../../dev-worker/task-state-manager.sh current
+go run ./cmd/taskstate -state ~/state.json current
 ```
 
 ### Check Sandbox State

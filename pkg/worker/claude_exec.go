@@ -66,8 +66,12 @@ func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager, debug boo
 		// Persist session.json
 		sessPath := filepath.Join(homeDir, "session.json")
 		_ = os.WriteFile(sessPath, []byte("{\n  \"sessionId\": \""+sessionId+"\"\n}"), 0o644)
-		// Link session to current
-		state.LinkSessionToCurrent(sessionId)
+		// Link session to current only if one is not already set
+		stNow := state.GetState()
+		alreadySet := stNow.Current != nil && stNow.Current.SessionID != ""
+		if !alreadySet {
+			state.LinkSessionToCurrent(sessionId)
+		}
 	}
 
 	// Mark current complete

@@ -82,7 +82,7 @@ if [ $? -eq 0 ]; then
     echo ""
     echo "✅ Task 1 completed successfully!"
     echo "📦 Sandbox name: $SANDBOX_NAME"
-    echo "📊 Check task state with: dev-worker/task-state-manager.sh status"
+    echo "📊 Check task state with: go run ./cmd/taskstate -state ~/state.json status"
     echo "🔄 Next step: Run run-task2-followup.sh $SANDBOX_NAME to add the second task"
 else
     echo ""
