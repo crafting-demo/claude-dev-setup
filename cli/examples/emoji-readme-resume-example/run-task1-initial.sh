@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR/../../.."
+REPO_ROOT="${REPO_ROOT:-$SCRIPT_DIR/../../..}"
 REPO="crafting-test1/claude_test"
 BRANCH="main"
 
@@ -62,12 +62,12 @@ echo "📦 Sandbox name: $SANDBOX_NAME"
 echo "Executing initial task with cs-cc (Go)..."
 (cd "$REPO_ROOT" && go run ./cmd/cs-cc \
     -p "$TASK1_PROMPT" \
-    -r "$REPO" \
+    --github-repo "$REPO" \
     --github-token "$GITHUB_TOKEN" \
-    -b "$BRANCH" \
-    -ad "$AGENTS_DIR" \
+    --github-branch "$BRANCH" \
+    --agents-dir "$AGENTS_DIR" \
     -t "$TOOL_WHITELIST" \
-    -tid "emoji-enhancement-task" \
+    --task-id "emoji-enhancement-task" \
     --pool "claude-dev-pool" \
     --template "cc-pool-test-temp" \
     -n "$SANDBOX_NAME" \

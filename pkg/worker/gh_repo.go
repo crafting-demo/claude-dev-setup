@@ -11,26 +11,27 @@ import (
 // EnsureGitHubAuth attempts a minimal auth check. If GITHUB_TOKEN is set, gh can use it via env.
 // We do not print the token; only the presence is logged by the caller.
 func EnsureGitHubAuth() error {
-	// If already authenticated, nothing to do
-	if err := exec.Command("gh", "auth", "status").Run(); err == nil {
-		return nil
-	}
-	// Attempt non-interactive login using GITHUB_TOKEN if present
+	// Always prefer non-interactive behavior
+	_ = os.Setenv("GIT_TERMINAL_PROMPT", "0")
+
 	token := os.Getenv("GITHUB_TOKEN")
-	if token != "" {
+
+	// If not authenticated, attempt non-interactive login using GITHUB_TOKEN
+	if err := exec.Command("gh", "auth", "status").Run(); err != nil && token != "" {
 		login := exec.Command("gh", "auth", "login", "--with-token")
 		login.Stdin = strings.NewReader(token + "\n")
-		// Ensure env carries token for gh and disable interactive git prompts
 		login.Env = append(os.Environ(), "GH_TOKEN="+token, "GIT_TERMINAL_PROMPT=0")
-		if err := login.Run(); err == nil {
-			// Configure git to use gh credentials and verify
-			_ = exec.Command("gh", "auth", "setup-git").Run()
-			if err := exec.Command("gh", "auth", "status").Run(); err == nil {
-				return nil
-			}
-		}
+		_ = login.Run()
 	}
-	// Fallback: return status error; caller may rely on workspace creds
+
+	// When a token is present, force git to use gh's credential helper over workspace defaults.
+	// This avoids falling back to wsenv when we do have a token.
+	if token != "" {
+		_ = exec.Command("git", "config", "--global", "--unset-all", "credential.https://github.com.helper").Run()
+		_ = exec.Command("gh", "auth", "setup-git").Run()
+	}
+
+	// Final status (may still succeed via workspace creds when token absent)
 	return exec.Command("gh", "auth", "status").Run()
 }
 

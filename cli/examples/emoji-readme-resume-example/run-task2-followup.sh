@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR/../../.."
+REPO_ROOT="${REPO_ROOT:-$SCRIPT_DIR/../../..}"
 
 # Get sandbox name from command line argument
 SANDBOX_NAME="$1"
@@ -71,7 +71,7 @@ echo "Executing follow-up task with cs-cc (Go) in resume mode..."
     --resume "$SANDBOX_NAME" \
     -p "$TASK2_PROMPT" \
     -t "$TASK2_TOOLS" \
-    -tid "badges-structure-task" \
+    --task-id "badges-structure-task" \
     --debug yes)
 
 if [ $? -eq 0 ]; then

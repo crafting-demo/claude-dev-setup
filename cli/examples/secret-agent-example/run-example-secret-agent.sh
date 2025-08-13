@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$SCRIPT_DIR/../../.."
+REPO_ROOT="${REPO_ROOT:-$SCRIPT_DIR/../../..}"
 REPO="crafting-test1/claude_test"
 BRANCH="main"
 
