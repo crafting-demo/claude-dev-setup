@@ -19,7 +19,7 @@ func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager, debug boo
 	}
 	// Build command. Use central MCP config if present.
 	mcpCfg := filepath.Join(homeDir, ".mcp.json")
-	args := []string{"--output-format", "stream-json", "-p", prompt}
+	args := []string{"--output-format", "stream-json", "--verbose", "-p", prompt}
 	if st, err := os.Stat(mcpCfg); err == nil && !st.IsDir() {
 		args = append([]string{"--mcp-config", mcpCfg}, args...)
 	}

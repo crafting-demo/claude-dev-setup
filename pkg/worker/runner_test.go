@@ -49,7 +49,7 @@ func TestRunner_Run_StartsNextAndLinksSession(t *testing.T) {
 	if st.Current != nil {
 		t.Fatalf("expected current to be cleared after run; got: %+v", st.Current)
 	}
-	if len(st.History) != 1 || st.History[0].ID != "t1" || st.History[0].SessionID != "sess-1" {
+	if len(st.History) != 1 || st.History[0].ID != "t1" || st.History[0].SessionID != "sess-1" || st.History[0].Status == "" {
 		t.Fatalf("unexpected history: %+v", st.History)
 	}
 }
