@@ -6,7 +6,7 @@ Launch developer agents in Crafting sandboxes using the `cs-cc` CLI. Create ephe
 
 - **Direct CLI interface** - Launch agents without GitHub polling/watching
 - **GitHub integration** - Work on issues, PRs, or specific branches
-- **Multi-agent workflows** - Coordinate multiple specialized agents via MCP tools
+- **Multi-agent workflows** - Coordinate specialized subagents; external MCP servers are supported as clients
 - **Vertex AI support** - Use Claude models through GCP Vertex AI
 - **Crafting native** - All work happens in ephemeral sandboxes
 
@@ -14,7 +14,19 @@ Launch developer agents in Crafting sandboxes using the `cs-cc` CLI. Create ephe
 
 1. **Create the template** in your Crafting dashboard named `claude-code-automation` using `claude-code-automation/template.yaml`
 2. **Set environment variables** in your sandbox with `ANTHROPIC_API_KEY` secret access
-3. **Use the CLI**:
+3. **Use the legacy CLI** (optional):
+4. **Build and run Go binaries**:
+   ```bash
+   # From claude-dev-setup root
+   make build
+   make test
+
+   # Run host CLI (validation only for now)
+   go run ./cmd/cs-cc --cmd-dir /home/owner/cmd --github-repo owner/repo --action-type branch --github-branch main
+
+   # Run worker (uses CMD_DIR=/home/owner/cmd, STATE_PATH=~/state.json, SESSION_PATH=~/session.json by default)
+   go run ./cmd/worker
+   ```
    ```bash
    ./cli/cs-cc -p "Fix the login bug" -r "owner/repo" -ght "your_token" -pr 123
    ```
@@ -34,8 +46,7 @@ Options:
   -pr, --pull-request <number>   Pull request number (mutually exclusive with -i, -b)
   -i, --issue <number>           Issue number (mutually exclusive with -pr, -b)
   -b, --branch <name>            Branch name (mutually exclusive with -pr, -i)
-  -mc, --mcp-config <value>      External MCP config string or file path (optional)
-  -lmc, --local-mcp-config <value> Local MCP tools config string or file path (optional)
+   -mc, --mcp-config <value>      External MCP config string or file path (optional)
   -t, --tools <value>            Tool whitelist string or file path (optional)
   -template, --template <value>  Custom template name (default: claude-code-automation)
   -d, --delete-when-done <yes|no> Delete sandbox when done (default: yes)
@@ -49,12 +60,12 @@ Options:
 
 Comprehensive examples with multi-agent workflows, GitHub integration, and various configurations are available in the [cli directory](./cli/examples).
 
-## Template Setup
+## Template Setup (Subagents by default)
 
 1. **Create the Claude Code Worker Template** in your Crafting dashboard named `claude-code-automation` using the `template.yaml` file in the `claude-code-automation/` directory
 2. **Set environment variables** - Ensure `ANTHROPIC_API_KEY` is configured as a Crafting secret path in your sandbox environment
 
-## Using Claude models with GCP Vertex AI 
+## Using Claude models with GCP Vertex AI
 
 To use Claude models through GCP Vertex AI instead of direct Anthropic API:
 

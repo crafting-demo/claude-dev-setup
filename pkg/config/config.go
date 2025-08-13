@@ -135,3 +135,20 @@ func validateJSONIfPresent(path string) bool {
 	var tmp any
 	return json.Unmarshal(b, &tmp) == nil
 }
+
+// ReadPromptFrom returns the contents of the first present prompt file.
+func ReadPromptFrom(baseDir string) string {
+	if baseDir == "" {
+		return ""
+	}
+	for _, name := range []string{"prompt.txt", "prompt_new.txt"} {
+		p := filepath.Join(baseDir, name)
+		if fileExists(p) {
+			b, err := os.ReadFile(p)
+			if err == nil {
+				return string(b)
+			}
+		}
+	}
+	return ""
+}

@@ -68,6 +68,26 @@ detect_project_subagents() {
 
 print_status "=== Claude Code Automation Workflow ==="
 
+# Prefer Go worker path when enabled; fallback to shell workflow on failure
+if [ "${USE_GO_WORKER:-true}" = "true" ]; then
+    # Ensure Go toolchain
+    if [ -f "$SCRIPT_DIR/setup-go.sh" ]; then
+        print_status "Ensuring Go toolchain is available..."
+        bash "$SCRIPT_DIR/setup-go.sh"
+    fi
+    if command -v go >/dev/null 2>&1; then
+        if [ -d "$HOME/claude-dev-setup" ]; then
+            print_status "Attempting Go worker path..."
+            if (cd "$HOME/claude-dev-setup" && go run ./cmd/worker); then
+                print_success "Go worker completed"
+                exit 0
+            else
+                print_warning "Go worker failed; falling back to shell path"
+            fi
+        fi
+    fi
+fi
+
 # Step 1: Determine task mode as early as possible so we can pivot setup behavior
 # Load TASK_MODE from /home/owner/cmd/task_mode.txt if not already set
 if [ -z "${TASK_MODE:-}" ]; then
