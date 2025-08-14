@@ -28,3 +28,5 @@ Focus on:
 - Better content discoverability
 
 📋 IMPORTANT: Preserve all existing content while improving structure and organization. Focus on making information easier to find and consume.
+
+📝 IMPORTANT: After improving structure and organization, commit your changes with a descriptive message like 'docs: reorganize README'.

@@ -1,10 +1,9 @@
 
 [
     "Read",
-    "Write", 
+    "Write",
     "Edit",
     "LS",
     "Grep",
-    "Bash",
-    "Task"
+    "Bash"
 ]

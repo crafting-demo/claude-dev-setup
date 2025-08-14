@@ -27,3 +27,5 @@ Focus on:
 - Easy maintenance and updates
 
 🏷️ IMPORTANT: Only add badges that are relevant and accurate for the repository. Avoid placeholder or fake badges.
+
+📝 IMPORTANT: After adding or updating badges, commit your changes with a descriptive message like 'docs: add badges'.

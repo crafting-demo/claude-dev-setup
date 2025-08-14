@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/your-org/claude-dev-setup/pkg/taskstate"
@@ -16,7 +17,10 @@ import (
 
 // RunClaudeStream executes `claude` with stream-json in the provided repoDir,
 // writes session.json when sessionId appears, and updates task state.
-func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, debug bool) error {
+//
+// permissionMode should typically be "default" (not bypass). When allowedTools is non-empty,
+// it will be passed via --allowedTools. disallowedTools is also honored.
+func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, debug bool, allowedTools []string, disallowedTools []string, permissionMode string) error {
 	if prompt == "" {
 		return errors.New("missing prompt")
 	}
@@ -28,7 +32,20 @@ func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, 
 	}
 	// Build command. Use central MCP config if present.
 	mcpCfg := filepath.Join(homeDir, ".mcp.json")
-	args := []string{"--output-format", "stream-json", "--verbose", "-p", prompt}
+	// Use --print for non-interactive mode; stream-json requires --verbose per CLI docs
+	args := []string{"--print", "--output-format", "stream-json", "--verbose"}
+	if permissionMode == "" {
+		permissionMode = "default"
+	}
+	args = append(args, "--permission-mode", permissionMode)
+	if len(allowedTools) > 0 {
+		args = append(args, "--allowedTools", strings.Join(allowedTools, ","))
+	}
+	if len(disallowedTools) > 0 {
+		args = append(args, "--disallowedTools", strings.Join(disallowedTools, ","))
+	}
+	// Positional prompt last, per CLI usage
+	args = append(args, prompt)
 	if st, err := os.Stat(mcpCfg); err == nil && !st.IsDir() {
 		args = append([]string{"--mcp-config", mcpCfg}, args...)
 	}

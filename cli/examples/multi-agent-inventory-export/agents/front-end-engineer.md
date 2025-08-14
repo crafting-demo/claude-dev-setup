@@ -21,3 +21,5 @@ Focus on:
 - Modern development practices
 
 📝 IMPORTANT: After completing your implementation, commit your changes with a descriptive message like 'feat(frontend): implement [description]'
+
+🔎 Logging: After making changes, run `git status --porcelain` and `git diff --name-only` and print the output to the logs to show exactly which files changed.
