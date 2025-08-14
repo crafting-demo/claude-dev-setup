@@ -123,3 +123,15 @@ Built artifacts are placed in `bin/` by `make build` targets:
 - `bin/worker` — Go worker entrypoint
 
 Use `make cs-cc` and `make worker` for explicit builds.
+
+## Exit codes
+
+The CLI uses explicit exit codes to make failure modes obvious:
+
+- 0: success
+- 2: validation error (args/contracts)
+- 10: sandbox create/resume failure
+- 11: file transfer failure (including agents copy)
+- 20: worker bootstrap/background start failure (non-debug)
+- 23: worker execution failure (debug mode)
+- 30: unexpected error

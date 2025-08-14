@@ -7,7 +7,7 @@ set -e
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${REPO_ROOT:-$SCRIPT_DIR/../../..}"
+REPO_ROOT="$SCRIPT_DIR/../../.."
 
 # Get sandbox name from command line argument
 SANDBOX_NAME="$1"
@@ -18,18 +18,8 @@ if [ -z "$SANDBOX_NAME" ]; then
     exit 1
 fi
 
-# Check for required environment variables
-if [ -z "$GITHUB_TOKEN" ]; then
-    echo "❌ Error: GITHUB_TOKEN environment variable is required"
-    echo "Usage: GITHUB_TOKEN=your_token_here $0 <sandbox_name>"
-    exit 1
-fi
-
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "❌ Error: ANTHROPIC_API_KEY environment variable is required"
-    echo "Usage: ANTHROPIC_API_KEY=your_key_here GITHUB_TOKEN=your_token_here $0 <sandbox_name>"
-    exit 1
-fi
+: "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}"
 
 # Task 2 configuration
 TASK2_PROMPT="$SCRIPT_DIR/task2-badges-and-structure.txt"
@@ -53,47 +43,19 @@ if [ ! -f "$TASK2_TOOLS" ]; then
     exit 1
 fi
 
-echo "🔄 Starting Emoji README Resume Example - Task 2 (Follow-up)"
-echo "📦 Resuming sandbox: $SANDBOX_NAME"
-echo "📝 Task 2 prompt: $TASK2_PROMPT"
-echo "🤖 Agents directory: $AGENTS_DIR"
-echo "🔧 Task 2 tools: $TASK2_TOOLS"
-echo ""
+echo "Resuming: $SANDBOX_NAME"
 
 # Check current task state
-echo "📊 Current task state:"
-(cd "$SCRIPT_DIR/../../.." && go run ./cmd/taskstate -state ~/state.json status) || echo "Could not read task state"
-echo ""
+echo "State:"
+(cd "$SCRIPT_DIR/../../.." && ./bin/taskstate -state ~/state.json status) || true
 
 # Execute cs-cc in resume mode with different tools (prefer built binary)
-echo "Executing follow-up task with cs-cc in resume mode..."
-(cd "$REPO_ROOT" && \
-  if [ -x ./bin/cs-cc ]; then \
-    ./bin/cs-cc \
-      --resume "$SANDBOX_NAME" \
-      -p "$TASK2_PROMPT" \
-      -t "$TASK2_TOOLS" \
-      --task-id "badges-structure-task" \
-      --debug yes; \
-  else \
-    go run ./cmd/cs-cc \
-      --resume "$SANDBOX_NAME" \
-      -p "$TASK2_PROMPT" \
-      -t "$TASK2_TOOLS" \
-      --task-id "badges-structure-task" \
-      --debug yes; \
-  fi)
+cd "$REPO_ROOT"
+./bin/cs-cc \
+  --resume "$SANDBOX_NAME" \
+  -p "$TASK2_PROMPT" \
+  -t "$TASK2_TOOLS" \
+  --task-id "badges-structure-task" \
+  --debug yes
 
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✅ Task 2 completed successfully!"
-    echo "📊 Final task state:"
-    (cd "$SCRIPT_DIR/../../.." && go run ./cmd/taskstate -state ~/state.json status) || echo "Could not read task state"
-    echo ""
-    echo "🎉 Multi-task workflow demonstration complete!"
-    echo "📦 Sandbox: $SANDBOX_NAME"
-else
-    echo ""
-    echo "❌ Task 2 failed"
-    exit 1
-fi
+echo "✅ Task 2 done"

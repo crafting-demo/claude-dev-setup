@@ -5,29 +5,16 @@
 
 set -e
 
-# Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${REPO_ROOT:-$SCRIPT_DIR/../../..}"
-REPO="crafting-test1/claude_test"
-BRANCH="main"
+REPO_ROOT="$SCRIPT_DIR/../../.."
 
 # Task 1 configuration
 TASK1_PROMPT="$SCRIPT_DIR/task1-emoji-enhancement.txt"
 AGENTS_DIR="$SCRIPT_DIR/agents"
 TOOL_WHITELIST="$SCRIPT_DIR/tool-whitelist.json"
 
-# Check for required environment variables
-if [ -z "$GITHUB_TOKEN" ]; then
-    echo "❌ Error: GITHUB_TOKEN environment variable is required"
-    echo "Usage: GITHUB_TOKEN=your_token_here ./run-task1-initial.sh"
-    exit 1
-fi
-
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "❌ Error: ANTHROPIC_API_KEY environment variable is required"
-    echo "Usage: ANTHROPIC_API_KEY=your_key_here GITHUB_TOKEN=your_token_here ./run-task1-initial.sh"
-    exit 1
-fi
+: "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}"
 
 # Validate required files exist
 
@@ -54,51 +41,20 @@ echo "🤖 Agents directory: $AGENTS_DIR"
 echo "🔧 Tool whitelist: $TOOL_WHITELIST"
 echo ""
 
-# Generate sandbox name (max 20 chars)
 SANDBOX_NAME="emoji-$(date +%m%d%H%M)"
-echo "📦 Sandbox name: $SANDBOX_NAME"
 
 # Execute cs-cc with task management for initial task (Go CLI)
-echo "Executing initial task with cs-cc (Go)..."
-(cd "$REPO_ROOT" && \
-  if [ -x ./bin/cs-cc ]; then \
-    ./bin/cs-cc \
-      -p "$TASK1_PROMPT" \
-      --github-repo "$REPO" \
-      --github-token "$GITHUB_TOKEN" \
-      --github-branch "$BRANCH" \
-      --agents-dir "$AGENTS_DIR" \
-      -t "$TOOL_WHITELIST" \
-      --task-id "emoji-enhancement-task" \
-      --pool "claude-dev-pool" \
-      --template "cc-pool-test-temp" \
-      -n "$SANDBOX_NAME" \
-      -d no \
-      --debug yes; \
-  else \
-    go run ./cmd/cs-cc \
-      -p "$TASK1_PROMPT" \
-      --github-repo "$REPO" \
-      --github-token "$GITHUB_TOKEN" \
-      --github-branch "$BRANCH" \
-      --agents-dir "$AGENTS_DIR" \
-      -t "$TOOL_WHITELIST" \
-      --task-id "emoji-enhancement-task" \
-      --pool "claude-dev-pool" \
-      --template "cc-pool-test-temp" \
-      -n "$SANDBOX_NAME" \
-      -d no \
-      --debug yes; \
-  fi)
+cd "$REPO_ROOT"
+./bin/cs-cc \
+  -p "$TASK1_PROMPT" \
+  --github-repo "crafting-test1/claude_test" \
+  --github-token "$GITHUB_TOKEN" \
+  --github-branch "main" \
+  --agents-dir "$AGENTS_DIR" \
+  -t "$TOOL_WHITELIST" \
+  --task-id "emoji-enhancement-task" \
+  --template "cc-pool-test-temp" \
+  -n "$SANDBOX_NAME" \
+  --debug yes
 
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✅ Task 1 completed successfully!"
-    echo "📦 Sandbox name: $SANDBOX_NAME"
-    echo "📊 Check task state with: go run ./cmd/taskstate -state ~/state.json status"
-    echo "🔄 Next step: Run run-task2-followup.sh $SANDBOX_NAME to add the second task"
-else
-    echo ""
-    echo "❌ Task 1 failed"
-    exit 1
-fi
+echo "✅ Task 1 done: $SANDBOX_NAME"

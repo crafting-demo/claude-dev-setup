@@ -6,15 +6,8 @@
 
 set -e
 
-# Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="${REPO_ROOT:-$SCRIPT_DIR/../../..}"
-REPO="crafting-test1/claude_test"
-BRANCH="main"
-
-SANDBOX_NAME="cs-cc-repo-agents"
-
-# Configuration files
+REPO_ROOT="$SCRIPT_DIR/../../.."
 PROMPT_FILE="$SCRIPT_DIR/orchestration-prompt.txt"
 TOOL_WHITELIST_FILE="$SCRIPT_DIR/tool-whitelist.json"
 
@@ -32,18 +25,8 @@ if [ ! -f "$TOOL_WHITELIST_FILE" ]; then
     exit 1
 fi
 
-# Check for required environment variables
-if [ -z "$GITHUB_TOKEN" ]; then
-    echo "❌ Error: GITHUB_TOKEN environment variable is required"
-    echo "Usage: GITHUB_TOKEN=your_token_here ./run-example-repo-agents.sh"
-    exit 1
-fi
-
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "❌ Error: ANTHROPIC_API_KEY environment variable is required"
-    echo "Usage: ANTHROPIC_API_KEY=your_key_here GITHUB_TOKEN=your_token_here ./run-example-repo-agents.sh"
-    exit 1
-fi
+: "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}"
 
 echo "🎯 Running emoji enhancement example with repository agent detection"
 echo "📁 This example will:"
@@ -55,39 +38,16 @@ echo ""
 echo "💡 Expected: The target repository should contain an /agents/ directory with emoji_enhancer.json"
 echo ""
 
-# Execute the cs-cc command WITHOUT --agents-dir (Go CLI). Prefer built binary.
-(cd "$REPO_ROOT" && \
-  if [ -x ./bin/cs-cc ]; then \
-    ./bin/cs-cc \
-      -p "$PROMPT_FILE" \
-      --github-repo "$REPO" \
-      --github-token "$GITHUB_TOKEN" \
-      --github-branch "$BRANCH" \
-      --repo-path "working-repo" \
-      --pool "claude-dev-pool" \
-      --template "cc-pool-test-temp" \
-      -t "$TOOL_WHITELIST_FILE" \
-      -n "$SANDBOX_NAME" \
-      -d no \
-      --debug yes; \
-  else \
-    go run ./cmd/cs-cc \
-      -p "$PROMPT_FILE" \
-      --github-repo "$REPO" \
-      --github-token "$GITHUB_TOKEN" \
-      --github-branch "$BRANCH" \
-      --repo-path "working-repo" \
-      --pool "claude-dev-pool" \
-      --template "cc-pool-test-temp" \
-      -t "$TOOL_WHITELIST_FILE" \
-      -n "$SANDBOX_NAME" \
-      -d no \
-      --debug yes; \
-  fi)
+cd "$REPO_ROOT"
+./bin/cs-cc \
+  -p "$PROMPT_FILE" \
+  --github-repo "crafting-test1/claude_test" \
+  --github-token "$GITHUB_TOKEN" \
+  --github-branch "main" \
+  --repo-path "working-repo" \
+  --template "cc-pool-test-temp" \
+  -t "$TOOL_WHITELIST_FILE" \
+  -n "cs-cc-repo-agents" \
+  --debug yes
 
-echo ""
-echo "✅ Emoji enhancement example completed!"
-echo "📋 Check the sandbox logs to verify:"
-echo "   • Repository agents directory detection"
-echo "   • Agent loading from repository /agents/ directory"
-echo "   • Successful emoji enhancement execution"
+echo "✅ Done"
