@@ -44,8 +44,8 @@ func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, 
 	if len(disallowedTools) > 0 {
 		args = append(args, "--disallowedTools", strings.Join(disallowedTools, ","))
 	}
-    // Provide prompt via -p to ensure non-interactive input is accepted even for multi-line prompts
-    args = append(args, "-p", prompt)
+	// Provide prompt via -p to ensure non-interactive input is accepted even for multi-line prompts
+	args = append(args, "-p", prompt)
 	if st, err := os.Stat(mcpCfg); err == nil && !st.IsDir() {
 		args = append([]string{"--mcp-config", mcpCfg}, args...)
 	}
