@@ -45,14 +45,28 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
     exit 1
 fi
 
-# Execute the cs-cc command (Go CLI)
-(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
-  -p "$PROMPT_FILE" \
-  -r "$REPO" \
-  --github-token "$GITHUB_TOKEN" \
-  -b "$BRANCH" \
-  -ad "$AGENTS_DIR" \
-  -t "$TOOL_WHITELIST_FILE" \
-  -n "$SANDBOX_NAME" \
-  -d no \
-  --debug yes)
+# Execute the cs-cc command (Go CLI). Prefer built binary; no Node fallback.
+(cd "$REPO_ROOT" && \
+  if [ -x ./bin/cs-cc ]; then \
+    ./bin/cs-cc \
+      -p "$PROMPT_FILE" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --agents-dir "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST_FILE" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  else \
+    go run ./cmd/cs-cc \
+      -p "$PROMPT_FILE" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --agents-dir "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST_FILE" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  fi)

@@ -55,19 +55,35 @@ echo ""
 echo "💡 Expected: The target repository should contain an /agents/ directory with emoji_enhancer.json"
 echo ""
 
-# Execute the cs-cc command WITHOUT -ad flag (Go CLI)
-(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
-  -p "$PROMPT_FILE" \
-  -r "$REPO" \
-  --github-token "$GITHUB_TOKEN" \
-  -b "$BRANCH" \
-  -rp "working-repo" \
-  -pool "claude-dev-pool" \
-  -template "cc-pool-test-temp" \
-  -t "$TOOL_WHITELIST_FILE" \
-  -n "$SANDBOX_NAME" \
-  -d no \
-  --debug yes)
+# Execute the cs-cc command WITHOUT --agents-dir (Go CLI). Prefer built binary.
+(cd "$REPO_ROOT" && \
+  if [ -x ./bin/cs-cc ]; then \
+    ./bin/cs-cc \
+      -p "$PROMPT_FILE" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --repo-path "working-repo" \
+      --pool "claude-dev-pool" \
+      --template "cc-pool-test-temp" \
+      -t "$TOOL_WHITELIST_FILE" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  else \
+    go run ./cmd/cs-cc \
+      -p "$PROMPT_FILE" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --repo-path "working-repo" \
+      --pool "claude-dev-pool" \
+      --template "cc-pool-test-temp" \
+      -t "$TOOL_WHITELIST_FILE" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  fi)
 
 echo ""
 echo "✅ Emoji enhancement example completed!"

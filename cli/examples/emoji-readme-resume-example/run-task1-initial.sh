@@ -75,7 +75,7 @@ echo "Executing initial task with cs-cc (Go)..."
       -n "$SANDBOX_NAME" \
       -d no \
       --debug yes; \
-  elif command -v go >/dev/null 2>&1; then \
+  else \
     go run ./cmd/cs-cc \
       -p "$TASK1_PROMPT" \
       --github-repo "$REPO" \
@@ -86,20 +86,6 @@ echo "Executing initial task with cs-cc (Go)..."
       --task-id "emoji-enhancement-task" \
       --pool "claude-dev-pool" \
       --template "cc-pool-test-temp" \
-      -n "$SANDBOX_NAME" \
-      -d no \
-      --debug yes; \
-  else \
-    node ./cli/cs-cc \
-      -p "$TASK1_PROMPT" \
-      -r "$REPO" \
-      -ght "$GITHUB_TOKEN" \
-      -b "$BRANCH" \
-      -ad "$AGENTS_DIR" \
-      -t "$TOOL_WHITELIST" \
-      -tid "emoji-enhancement-task" \
-      -pool "claude-dev-pool" \
-      -template "cc-pool-test-temp" \
       -n "$SANDBOX_NAME" \
       -d no \
       --debug yes; \

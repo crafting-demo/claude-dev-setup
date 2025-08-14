@@ -56,19 +56,35 @@ echo "   3. Instruct Claude to use the secret-agent subagent"
 echo "   4. Return favorites as JSON (or NO_AGENT_INVOCATION if not actually invoked)"
 echo ""
 
-# Execute the cs-cc command (Go CLI)
-(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
-  -p "$PROMPT_FILE" \
-  -r "$REPO" \
-  --github-token "$GITHUB_TOKEN" \
-  -b "$BRANCH" \
-  -pool "claude-dev-pool" \
-  -template "cc-pool-test-temp" \
-  -ad "$AGENTS_DIR" \
-  -t "$TOOL_WHITELIST_FILE" \
-  -n "$SANDBOX_NAME" \
-  -d no \
-  --debug yes)
+# Execute the cs-cc command (Go CLI). Prefer built binary; no Node fallback.
+(cd "$REPO_ROOT" && \
+  if [ -x ./bin/cs-cc ]; then \
+    ./bin/cs-cc \
+      -p "$PROMPT_FILE" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --pool "claude-dev-pool" \
+      --template "cc-pool-test-temp" \
+      --agents-dir "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST_FILE" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  else \
+    go run ./cmd/cs-cc \
+      -p "$PROMPT_FILE" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --pool "claude-dev-pool" \
+      --template "cc-pool-test-temp" \
+      --agents-dir "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST_FILE" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  fi)
 
 echo ""
 echo "✅ Secret agent example completed!"

@@ -19,7 +19,14 @@ import (
 	"github.com/your-org/claude-dev-setup/pkg/sandbox"
 )
 
+var version string
+
 func main() {
+	// version can be overridden at build time via: -ldflags "-X main.version=1.0.0"
+	// default is "dev" during local development
+	if version == "" {
+		version = "dev"
+	}
 	opts := &options{}
 
 	rootCmd := &cobra.Command{
@@ -31,6 +38,8 @@ func main() {
 			return run(opts)
 		},
 	}
+
+	rootCmd.Version = version
 
 	// Core flags (host contracts + GitHub context)
 	rootCmd.Flags().StringVar(&opts.cmdDir, "cmd-dir", "/home/owner/cmd", "Path to worker command directory in sandbox")
@@ -44,16 +53,16 @@ func main() {
 	rootCmd.Flags().StringVarP(&opts.prompt, "prompt", "p", "", "Prompt string or file path (required)")
 	rootCmd.Flags().StringVar(&opts.pool, "pool", "", "Sandbox pool name")
 	rootCmd.Flags().StringVar(&opts.ghToken, "github-token", "", "GitHub access token (optional)")
-    rootCmd.Flags().StringVar(&opts.mcpCfg, "mcp-config", "", "External MCP config JSON string or file path")
-    rootCmd.Flags().StringVar(&opts.agentsDir, "agents-dir", "", "Directory containing agent .md files")
+	rootCmd.Flags().StringVar(&opts.mcpCfg, "mcp-config", "", "External MCP config JSON string or file path")
+	rootCmd.Flags().StringVar(&opts.agentsDir, "agents-dir", "", "Directory containing agent .md files")
 	rootCmd.Flags().StringVarP(&opts.tools, "tools", "t", "", "Tool whitelist JSON string or file path")
 	rootCmd.Flags().StringVar(&opts.template, "template", "claude-code-automation", "Sandbox template name")
 	rootCmd.Flags().StringVarP(&opts.deleteWhenDone, "delete-when-done", "d", "yes", "Delete sandbox when done: yes|no")
 	rootCmd.Flags().StringVarP(&opts.name, "name", "n", "", "Sandbox name (auto-generated if empty)")
 	rootCmd.Flags().StringVar(&opts.resume, "resume", "", "Resume existing sandbox (skip creation)")
-    rootCmd.Flags().StringVar(&opts.taskID, "task-id", "", "Custom task ID")
+	rootCmd.Flags().StringVar(&opts.taskID, "task-id", "", "Custom task ID")
 	rootCmd.Flags().StringVar(&opts.debug, "debug", "no", "Debug mode: yes|no")
-    rootCmd.Flags().StringVar(&opts.customRepoPath, "repo-path", "", "Custom repo path inside sandbox (optional)")
+	rootCmd.Flags().StringVar(&opts.customRepoPath, "repo-path", "", "Custom repo path inside sandbox (optional)")
 	rootCmd.Flags().BoolVar(&opts.dryRun, "dry-run", false, "Validate and print planned actions without executing")
 
 	if err := rootCmd.Execute(); err != nil {
@@ -179,11 +188,13 @@ func run(o *options) error {
 
 	// Dry-run
 	if o.dryRun {
-		// Build and show exact create command
 		r := sandbox.NewRunner()
-		createCmd := r.BuildCreateCommand(firstNonEmpty(o.name, generateSandboxName(o.repo, firstNonEmpty(o.prNum, o.issueNum, "dev"))), o.template, o.pool, envVars)
-		fmt.Println("cs sandbox create (preview):")
-		fmt.Println(createCmd)
+		if !isResume {
+			// Build and show exact create command only for create mode (parity with legacy CLI)
+			createCmd := r.BuildCreateCommand(firstNonEmpty(o.name, generateSandboxName(o.repo, firstNonEmpty(o.prNum, o.issueNum, "dev"))), o.template, o.pool, envVars)
+			fmt.Println("cs sandbox create (preview):")
+			fmt.Println(createCmd)
+		}
 		printDryRun(sandboxName, isResume, o, agents)
 		return nil
 	}
@@ -413,6 +424,13 @@ func listAgentFiles(dir string) ([]agentFile, error) {
 				return rerr
 			}
 			name := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
+			if fm := parseYamlFrontmatter(string(b)); fm != nil {
+				// Legacy Node CLI required name and description in frontmatter
+				if fm["name"] == "" || fm["description"] == "" {
+					return fmt.Errorf("agent %s missing required frontmatter fields (name, description)", d.Name())
+				}
+				name = fm["name"]
+			}
 			files = append(files, agentFile{name: name, content: string(b)})
 		}
 		return nil
@@ -550,4 +568,36 @@ func validateGitHubResources(repo, pr, issue, branch, token string) error {
 		return nil
 	}
 	return nil
+}
+
+// parseYamlFrontmatter extracts simple YAML key: value pairs between '---' delimiters.
+// Returns nil when no frontmatter present.
+func parseYamlFrontmatter(content string) map[string]string {
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return nil
+	}
+	endIdx := -1
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimSpace(lines[i]) == "---" {
+			endIdx = i
+			break
+		}
+	}
+	if endIdx == -1 {
+		return nil
+	}
+	fm := map[string]string{}
+	for _, line := range lines[1:endIdx] {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		if idx := strings.Index(t, ":"); idx > 0 {
+			key := strings.TrimSpace(t[:idx])
+			val := strings.TrimSpace(t[idx+1:])
+			fm[key] = val
+		}
+	}
+	return fm
 }

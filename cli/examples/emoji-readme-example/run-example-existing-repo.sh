@@ -49,17 +49,34 @@ if [ -z "$ANTHROPIC_API_KEY" ]; then
     exit 1
 fi
 
-# Execute the cs-cc command (Go CLI)
-(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
-  -p "$PROMPT_FILE" \
-  -r "$REPO" \
-  --github-token "$GITHUB_TOKEN" \
-  -b "$BRANCH" \
-  -rp "working-repo" \
-  -pool "claude-dev-pool" \
-  -template "cc-pool-test-temp" \
-  -ad "$AGENTS_DIR" \
-  -t "$TOOL_WHITELIST_FILE" \
-  -n "$SANDBOX_NAME" \
-  -d no \
-  --debug yes)
+# Execute the cs-cc command (Go CLI). Prefer built binary when present; no Node fallback.
+(cd "$REPO_ROOT" && \
+  if [ -x ./bin/cs-cc ]; then \
+    ./bin/cs-cc \
+      -p "$PROMPT_FILE" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --repo-path "working-repo" \
+      --pool "claude-dev-pool" \
+      --template "cc-pool-test-temp" \
+      --agents-dir "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST_FILE" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  else \
+    go run ./cmd/cs-cc \
+      -p "$PROMPT_FILE" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --repo-path "working-repo" \
+      --pool "claude-dev-pool" \
+      --template "cc-pool-test-temp" \
+      --agents-dir "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST_FILE" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  fi)

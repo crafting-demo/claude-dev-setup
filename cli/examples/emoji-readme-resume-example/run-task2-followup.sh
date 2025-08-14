@@ -75,19 +75,12 @@ echo "Executing follow-up task with cs-cc in resume mode..."
       -t "$TASK2_TOOLS" \
       --task-id "badges-structure-task" \
       --debug yes; \
-  elif command -v go >/dev/null 2>&1; then \
+  else \
     go run ./cmd/cs-cc \
       --resume "$SANDBOX_NAME" \
       -p "$TASK2_PROMPT" \
       -t "$TASK2_TOOLS" \
       --task-id "badges-structure-task" \
-      --debug yes; \
-  else \
-    node ./cli/cs-cc \
-      --resume "$SANDBOX_NAME" \
-      -p "$TASK2_PROMPT" \
-      -t "$TASK2_TOOLS" \
-      -tid "badges-structure-task" \
       --debug yes; \
   fi)
 
