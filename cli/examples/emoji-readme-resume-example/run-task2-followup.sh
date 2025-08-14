@@ -65,14 +65,31 @@ echo "📊 Current task state:"
 (cd "$SCRIPT_DIR/../../.." && go run ./cmd/taskstate -state ~/state.json status) || echo "Could not read task state"
 echo ""
 
-# Execute cs-cc in resume mode with different tools (Go CLI)
-echo "Executing follow-up task with cs-cc (Go) in resume mode..."
-(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
-    --resume "$SANDBOX_NAME" \
-    -p "$TASK2_PROMPT" \
-    -t "$TASK2_TOOLS" \
-    --task-id "badges-structure-task" \
-    --debug yes)
+# Execute cs-cc in resume mode with different tools (prefer built binary)
+echo "Executing follow-up task with cs-cc in resume mode..."
+(cd "$REPO_ROOT" && \
+  if [ -x ./bin/cs-cc ]; then \
+    ./bin/cs-cc \
+      --resume "$SANDBOX_NAME" \
+      -p "$TASK2_PROMPT" \
+      -t "$TASK2_TOOLS" \
+      --task-id "badges-structure-task" \
+      --debug yes; \
+  elif command -v go >/dev/null 2>&1; then \
+    go run ./cmd/cs-cc \
+      --resume "$SANDBOX_NAME" \
+      -p "$TASK2_PROMPT" \
+      -t "$TASK2_TOOLS" \
+      --task-id "badges-structure-task" \
+      --debug yes; \
+  else \
+    node ./cli/cs-cc \
+      --resume "$SANDBOX_NAME" \
+      -p "$TASK2_PROMPT" \
+      -t "$TASK2_TOOLS" \
+      -tid "badges-structure-task" \
+      --debug yes; \
+  fi)
 
 if [ $? -eq 0 ]; then
     echo ""

@@ -52,7 +52,7 @@ func main() {
 
 		// Authenticate with GitHub if possible (token presence only logged elsewhere)
 		_ = worker.EnsureGitHubAuth()
-		// Prepare repository only when we have repo/branch context
+		// Prepare repository only when we have repo/branch context AND when no custom repo path is provided
 		repo := cfg.GitHub.Repo
 		if repo == "" {
 			repo = os.Getenv("GITHUB_REPO")
@@ -61,8 +61,11 @@ func main() {
 		if branch == "" {
 			branch = os.Getenv("GITHUB_BRANCH")
 		}
-		if repo != "" || branch != "" {
-			_ = worker.PrepareRepo(os.Getenv("HOME"), "", repo, branch)
+		customRepo := strings.TrimSpace(os.Getenv("CUSTOM_REPO_PATH"))
+		if customRepo == "" && (repo != "" || branch != "") {
+			// Clone into default target-repo path
+			repoDir := filepath.Join(os.Getenv("HOME"), "claude", "target-repo")
+			_ = worker.PrepareRepo(os.Getenv("HOME"), repoDir, repo, branch)
 		}
 	}
 

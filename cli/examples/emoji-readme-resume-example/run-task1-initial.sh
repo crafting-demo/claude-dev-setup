@@ -60,19 +60,50 @@ echo "📦 Sandbox name: $SANDBOX_NAME"
 
 # Execute cs-cc with task management for initial task (Go CLI)
 echo "Executing initial task with cs-cc (Go)..."
-(cd "$REPO_ROOT" && go run ./cmd/cs-cc \
-    -p "$TASK1_PROMPT" \
-    --github-repo "$REPO" \
-    --github-token "$GITHUB_TOKEN" \
-    --github-branch "$BRANCH" \
-    --agents-dir "$AGENTS_DIR" \
-    -t "$TOOL_WHITELIST" \
-    --task-id "emoji-enhancement-task" \
-    --pool "claude-dev-pool" \
-    --template "cc-pool-test-temp" \
-    -n "$SANDBOX_NAME" \
-    -d no \
-    --debug yes)
+(cd "$REPO_ROOT" && \
+  if [ -x ./bin/cs-cc ]; then \
+    ./bin/cs-cc \
+      -p "$TASK1_PROMPT" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --agents-dir "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST" \
+      --task-id "emoji-enhancement-task" \
+      --pool "claude-dev-pool" \
+      --template "cc-pool-test-temp" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  elif command -v go >/dev/null 2>&1; then \
+    go run ./cmd/cs-cc \
+      -p "$TASK1_PROMPT" \
+      --github-repo "$REPO" \
+      --github-token "$GITHUB_TOKEN" \
+      --github-branch "$BRANCH" \
+      --agents-dir "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST" \
+      --task-id "emoji-enhancement-task" \
+      --pool "claude-dev-pool" \
+      --template "cc-pool-test-temp" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  else \
+    node ./cli/cs-cc \
+      -p "$TASK1_PROMPT" \
+      -r "$REPO" \
+      -ght "$GITHUB_TOKEN" \
+      -b "$BRANCH" \
+      -ad "$AGENTS_DIR" \
+      -t "$TOOL_WHITELIST" \
+      -tid "emoji-enhancement-task" \
+      -pool "claude-dev-pool" \
+      -template "cc-pool-test-temp" \
+      -n "$SANDBOX_NAME" \
+      -d no \
+      --debug yes; \
+  fi)
 
 if [ $? -eq 0 ]; then
     echo ""

@@ -14,10 +14,17 @@ import (
 	"github.com/your-org/claude-dev-setup/pkg/taskstate"
 )
 
-// RunClaudeStream executes `claude` with stream-json, writes session.json when sessionId appears, and updates task state.
-func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager, debug bool) error {
+// RunClaudeStream executes `claude` with stream-json in the provided repoDir,
+// writes session.json when sessionId appears, and updates task state.
+func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, debug bool) error {
 	if prompt == "" {
 		return errors.New("missing prompt")
+	}
+	if repoDir == "" {
+		return errors.New("missing repoDir")
+	}
+	if st, err := os.Stat(repoDir); err != nil || !st.IsDir() {
+		return fmt.Errorf("repoDir not found or not a directory: %s", repoDir)
 	}
 	// Build command. Use central MCP config if present.
 	mcpCfg := filepath.Join(homeDir, ".mcp.json")
@@ -26,6 +33,7 @@ func RunClaudeStream(homeDir, prompt string, state *taskstate.Manager, debug boo
 		args = append([]string{"--mcp-config", mcpCfg}, args...)
 	}
 	cmd := exec.Command("claude", args...)
+	cmd.Dir = repoDir
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

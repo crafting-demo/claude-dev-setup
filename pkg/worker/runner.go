@@ -80,10 +80,20 @@ func (r *Runner) Run(cmdDir, statePath, sessionPath string) error {
 		mgr.StartNext()
 	}
 
-	// Execute Claude stream-json minimally to produce session.json and complete current
+	// Determine repo directory: CUSTOM_REPO_PATH (absolute or HOME-relative),
+	// or default to /home/owner/claude/target-repo
+	repoDir := os.Getenv("CUSTOM_REPO_PATH")
+	if repoDir != "" && !filepath.IsAbs(repoDir) {
+		repoDir = filepath.Join(os.Getenv("HOME"), repoDir)
+	}
+	if repoDir == "" {
+		repoDir = filepath.Join(os.Getenv("HOME"), "claude", "target-repo")
+	}
+
+	// Execute Claude stream-json in the repo directory
 	if st := mgr.GetState(); st.Current != nil && prompt != "" {
 		debug := os.Getenv("DEBUG_MODE") == "true"
-		if err := RunClaudeStream(os.Getenv("HOME"), prompt, mgr, debug); err != nil {
+		if err := RunClaudeStream(os.Getenv("HOME"), repoDir, prompt, mgr, debug); err != nil {
 			// If Claude is unavailable in unit tests, fall back to completing current
 			mgr.CompleteCurrent("done")
 		}
