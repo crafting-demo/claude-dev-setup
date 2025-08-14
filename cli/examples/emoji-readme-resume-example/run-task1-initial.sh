@@ -5,35 +5,18 @@
 
 set -e
 
-# Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CLI_PATH="$SCRIPT_DIR/../../cs-cc"
-REPO="crafting-test1/claude_test"
-BRANCH="main"
+REPO_ROOT="$SCRIPT_DIR/../../.."
 
 # Task 1 configuration
 TASK1_PROMPT="$SCRIPT_DIR/task1-emoji-enhancement.txt"
 AGENTS_DIR="$SCRIPT_DIR/agents"
 TOOL_WHITELIST="$SCRIPT_DIR/tool-whitelist.json"
 
-# Check for required environment variables
-if [ -z "$GITHUB_TOKEN" ]; then
-    echo "❌ Error: GITHUB_TOKEN environment variable is required"
-    echo "Usage: GITHUB_TOKEN=your_token_here ./run-task1-initial.sh"
-    exit 1
-fi
-
-if [ -z "$ANTHROPIC_API_KEY" ]; then
-    echo "❌ Error: ANTHROPIC_API_KEY environment variable is required"
-    echo "Usage: ANTHROPIC_API_KEY=your_key_here GITHUB_TOKEN=your_token_here ./run-task1-initial.sh"
-    exit 1
-fi
+: "${GITHUB_TOKEN:?GITHUB_TOKEN is required}"
+: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}"
 
 # Validate required files exist
-if [ ! -f "$CLI_PATH" ]; then
-    echo "❌ Error: cs-cc CLI not found at $CLI_PATH"
-    exit 1
-fi
 
 if [ ! -f "$TASK1_PROMPT" ]; then
     echo "❌ Error: Task 1 prompt not found at $TASK1_PROMPT"
@@ -58,34 +41,20 @@ echo "🤖 Agents directory: $AGENTS_DIR"
 echo "🔧 Tool whitelist: $TOOL_WHITELIST"
 echo ""
 
-# Generate sandbox name (max 20 chars)
 SANDBOX_NAME="emoji-$(date +%m%d%H%M)"
-echo "📦 Sandbox name: $SANDBOX_NAME"
 
-# Execute cs-cc with task management for initial task
-echo "Executing initial task with cs-cc..."
-"$CLI_PATH" \
-    -p "$TASK1_PROMPT" \
-    -r "$REPO" \
-    -ght "$GITHUB_TOKEN" \
-    -b "$BRANCH" \
-    -ad "$AGENTS_DIR" \
-    -t "$TOOL_WHITELIST" \
-    -tid "emoji-enhancement-task" \
-    -pool "claude-dev-pool" \
-    -template "cc-pool-test-temp" \
-    -n "$SANDBOX_NAME" \
-    -d no \
-    --debug yes
+# Execute cs-cc with task management for initial task (Go CLI)
+cd "$REPO_ROOT"
+./bin/cs-cc \
+  -p "$TASK1_PROMPT" \
+  --github-repo "crafting-test1/claude_test" \
+  --github-token "$GITHUB_TOKEN" \
+  --github-branch "main" \
+  --agents-dir "$AGENTS_DIR" \
+  -t "$TOOL_WHITELIST" \
+  --task-id "emoji-enhancement-task" \
+  --template "cc-pool-test-temp" \
+  -n "$SANDBOX_NAME" \
+  --debug yes
 
-if [ $? -eq 0 ]; then
-    echo ""
-    echo "✅ Task 1 completed successfully!"
-    echo "📦 Sandbox name: $SANDBOX_NAME"
-    echo "📊 Check task state with: dev-worker/task-state-manager.sh status"
-    echo "🔄 Next step: Run run-task2-followup.sh $SANDBOX_NAME to add the second task"
-else
-    echo ""
-    echo "❌ Task 1 failed"
-    exit 1
-fi
+echo "✅ Task 1 done: $SANDBOX_NAME"

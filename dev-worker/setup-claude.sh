@@ -113,39 +113,42 @@ cleanup_claude_installation
 
 # Step 5: Check if Claude Code is already properly installed
 print_status "Checking for existing Claude Code installation..."
+
+# Desired version can be provided via CLAUDE_CLI_VERSION, default to 1.0.77
+DESIRED_VERSION="${CLAUDE_CLI_VERSION:-1.0.77}"
+
 if command_exists claude; then
     CURRENT_VERSION=$(claude --version 2>/dev/null || echo "unknown")
-    print_warning "Claude Code is already installed (version: $CURRENT_VERSION)"
-    
-    # Ask if user wants to reinstall (or provide --force flag)
-    if [[ "${1:-}" == "--force" ]] || [[ "${1:-}" == "-f" ]]; then
-        print_status "Force flag detected, reinstalling Claude Code..."
+    print_status "Detected installed Claude Code: ${CURRENT_VERSION}"
+    if echo "$CURRENT_VERSION" | grep -q "$DESIRED_VERSION"; then
+        if [[ "${1:-}" == "--force" ]] || [[ "${1:-}" == "-f" ]]; then
+            print_status "Force flag detected; reinstalling pinned version $DESIRED_VERSION..."
+            npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
+            cleanup_claude_installation
+        else
+            print_success "Pinned version $DESIRED_VERSION already installed; skipping reinstall"
+            # Proceed to verification
+            DESIRED_ALREADY_INSTALLED=1
+        fi
+    else
+        print_status "Installed version does not match desired $DESIRED_VERSION; reinstalling..."
         npm uninstall -g @anthropic-ai/claude-code 2>/dev/null || true
         cleanup_claude_installation
-    else
-        print_status "Use --force or -f flag to reinstall, or skip to verification step"
-        print_success "Claude Code is already installed and working"
-        # Skip to verification
-        echo
-        print_success "🎉 Claude Code setup completed successfully!"
-        echo
-        print_status "Next steps:"
-        echo "  1. Navigate to your workspace: cd ~/claude/claude-workspace"
-        echo "  2. Test Claude Code: claude --version"
-        echo "  3. Start using Claude Code: claude"
-        echo
-        print_warning "Note: You'll need to authenticate with your Anthropic API key when you first run Claude Code"
     fi
 fi
 
 # Step 6: Install Claude Code
-print_status "Installing Claude Code globally..."
-if npm install -g @anthropic-ai/claude-code; then
-    print_success "Claude Code installed successfully"
+if [ -n "$DESIRED_ALREADY_INSTALLED" ]; then
+    print_status "Skipping install step; desired version already present"
 else
-    print_error "Failed to install Claude Code"
-    print_warning "This might be due to a corrupted npm cache. Try running: npm cache clean --force"
-    exit 1
+    print_status "Installing Claude Code globally (version $DESIRED_VERSION)..."
+    if npm install -g @anthropic-ai/claude-code@"$DESIRED_VERSION"; then
+        print_success "Claude Code installed successfully"
+    else
+        print_error "Failed to install Claude Code"
+        print_warning "This might be due to a corrupted npm cache. Try running: npm cache clean --force"
+        exit 1
+    fi
 fi
 
 # Step 7: Verify installation

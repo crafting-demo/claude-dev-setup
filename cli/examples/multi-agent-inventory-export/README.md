@@ -37,7 +37,7 @@ The workflow involves three specialized agents that use **dynamic inputs** to bu
 1. **Environment Setup**
    - `GITHUB_TOKEN` environment variable with repo access permissions
    - `ANTHROPIC_API_KEY` environment variable with your Anthropic API key
-   - Built `cs-cc` CLI available at `../../cs-cc`
+   - Go toolchain installed; run with `go run ./cmd/cs-cc`
 
 2. **GitHub Repository**
    - Target repo: `crafting-test1/claude_test`

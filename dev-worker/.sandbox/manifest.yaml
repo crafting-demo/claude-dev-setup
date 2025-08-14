@@ -4,32 +4,22 @@ hooks:
       export CLI_SCRIPT=y
       mkdir -p "$HOME/claude"      
       mkdir -p "$HOME/cmd"
-      
-      # Install MCP dependencies with better error handling
-      echo "Installing MCP dependencies..."
-      if [ -d "$HOME/claude/dev-worker/local_mcp_server" ]; then
-        cd "$HOME/claude/dev-worker/local_mcp_server"
-        if [ -f "package.json" ]; then
-          echo "Found package.json, installing dependencies..."
-          # Use full path to npm and ensure it's available
-          export PATH="/usr/local/go/bin:/usr/local/node/bin:$PATH"
-          /usr/local/node/bin/npm install --silent --no-progress || {
-            echo "Warning: Failed to install MCP dependencies"
-            echo "npm location: $(which npm || echo 'npm not found')"
-            echo "PATH: $PATH"
-            ls -la
-            cat package.json
-          }
-          echo "npm install completed, checking node_modules..."
-          ls -la node_modules/ || echo "node_modules directory not created"
-        else
-          echo "Warning: package.json not found in MCP server directory"
-        fi
-      else
-        echo "Warning: MCP server directory not found"
+
+      # Ensure Go toolchain for Go worker path
+      if [ -f "$HOME/claude/dev-worker/setup-go.sh" ]; then
+        bash "$HOME/claude/dev-worker/setup-go.sh" || echo "Warning: setup-go.sh failed"
       fi
+
+      # Ensure PATH includes common install locations and user-local Go
+      export PATH="$HOME/.local/go/bin:/usr/local/go/bin:/usr/local/node/bin:$PATH"
+      export PATH="$HOME/.npm-global/bin:$PATH"
       
       # Ensure owner user owns all files
       sudo chown -R owner:owner "$HOME/claude" || true
+      
+      # Ensure Claude CLI pinned version is installed
+      if [ -f "$HOME/claude/dev-worker/setup-claude.sh" ]; then
+        CLAUDE_CLI_VERSION=1.0.77 bash "$HOME/claude/dev-worker/setup-claude.sh" || echo "Warning: setup-claude.sh failed"
+      fi
       
       echo "Post-checkout hook completed"

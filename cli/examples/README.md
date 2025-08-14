@@ -28,6 +28,10 @@ A simple single-agent example demonstrating README enhancement with emojis and v
 
 - **emoji_enhancer** - Specializes in adding emojis and visual improvements to documentation
 
+### ⚡ Fast No-Debug (`fast-no-debug-example/`)
+
+A minimal example that runs without `--debug` and verifies results via `cs exec`. Useful for quick smoke checks.
+
 ## Common Features
 
 All examples demonstrate:

@@ -21,6 +21,15 @@ Make the README.md more engaging and visually appealing by adding appropriate em
 **APPROACH:**
 Use the emoji-enhancer subagent to transform the existing README into a more visually appealing and engaging document. Focus on making it easier to scan and more inviting to read.
 
+**COMMIT POLICY (MANDATORY):**
+- After ANY change is applied by you or any subagent, immediately commit the change before proceeding.
+- Use:
+  ```bash
+  git add -A
+  git commit -m "docs: incremental README enhancement (describe specific change)"
+  ```
+- Do not leave the working tree dirty between steps.
+
 **COMPLETION REQUIREMENTS:**
 Once you have successfully enhanced the README with emojis and visual improvements:
 
