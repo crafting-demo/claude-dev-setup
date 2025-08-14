@@ -30,6 +30,25 @@ Launch developer agents in Crafting sandboxes using the `cs-cc` CLI. Create ephe
    # Prefer built binaries when available
    ./bin/cs-cc -p prompt.txt --github-repo owner/repo --github-branch main --debug no
 
+## Install on Linux
+
+Quick installs from the latest GitHub Release:
+
+- With curl (system-wide):
+```bash
+sudo curl -L -o /usr/local/bin/cs-cc "https://github.com/your-org/claude-dev-setup/releases/latest/download/cs-cc_linux_amd64" && sudo chmod +x /usr/local/bin/cs-cc
+```
+
+- With wget (system-wide):
+```bash
+sudo wget -O /usr/local/bin/cs-cc "https://github.com/your-org/claude-dev-setup/releases/latest/download/cs-cc_linux_amd64" && sudo chmod +x /usr/local/bin/cs-cc
+```
+
+- User-local (no sudo, one line):
+```bash
+install -Dm755 <(curl -L "https://github.com/your-org/claude-dev-setup/releases/latest/download/cs-cc_linux_amd64") "$HOME/.local/bin/cs-cc"
+```
+
 ## CLI Usage (Go)
 
 ```

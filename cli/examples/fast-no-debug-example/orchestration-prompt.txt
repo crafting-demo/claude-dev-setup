@@ -1,0 +1,2 @@
+Create a short file called hello.txt in the home directory containing the text "hello". Then print a confirmation line: CREATED:~/hello.txt. Use simple shell commands if needed.
+

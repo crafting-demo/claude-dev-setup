@@ -34,6 +34,7 @@ func main() {
 		Short:         "Claude Sandbox Code CLI (Go)",
 		SilenceUsage:  true,
 		SilenceErrors: true,
+		Args:          cobra.NoArgs, // disallow positionals so flag order never matters
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run(opts)
 		},
@@ -67,7 +68,11 @@ func main() {
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
-		os.Exit(2)
+		var ce *codeError
+		if errors.As(err, &ce) {
+			os.Exit(ce.code)
+		}
+		os.Exit(30)
 	}
 }
 
@@ -99,13 +104,13 @@ type options struct {
 
 func run(o *options) error {
 	if strings.TrimSpace(o.prompt) == "" {
-		return errors.New("prompt (-p) is required")
+		return newCodeError(2, "prompt (-p) is required", nil)
 	}
 	if !isYesNo(o.deleteWhenDone) {
-		return fmt.Errorf("delete-when-done must be yes|no")
+		return newCodeError(2, "delete-when-done must be yes|no", nil)
 	}
 	if !isYesNo(o.debug) {
-		return fmt.Errorf("debug must be yes|no")
+		return newCodeError(2, "debug must be yes|no", nil)
 	}
 
 	// Validate GitHub context only when provided
@@ -119,26 +124,26 @@ func run(o *options) error {
 			IssueNumber: o.issueNum,
 		}
 		if err := fakeDirExists(parsed.CmdDir, func() error { return hostcli.Validate(parsed) }); err != nil {
-			return err
+			return newCodeError(2, "parameter validation failed", err)
 		}
 	}
 
 	// Resolve inputs
 	promptContent, err := readFileOrString(o.prompt)
 	if err != nil {
-		return fmt.Errorf("prompt: %w", err)
+		return newCodeError(2, "invalid prompt input", err)
 	}
 	mcpJSON, err := readOptionalJSON(o.mcpCfg)
 	if err != nil {
-		return fmt.Errorf("mcp-config: %w", err)
+		return newCodeError(2, "invalid mcp-config", err)
 	}
 	toolsJSON, err := readOptionalJSON(o.tools)
 	if err != nil {
-		return fmt.Errorf("tools: %w", err)
+		return newCodeError(2, "invalid tools whitelist", err)
 	}
 	agents, err := listAgentFiles(o.agentsDir)
 	if err != nil {
-		return fmt.Errorf("agents-dir: %w", err)
+		return newCodeError(2, "invalid agents directory", err)
 	}
 
 	// Determine sandbox
@@ -182,7 +187,7 @@ func run(o *options) error {
 	// GitHub resource existence checks (parity with JS CLI). Only validate on create.
 	if !isResume {
 		if err := validateGitHubResources(o.repo, o.prNum, o.issueNum, o.branch, o.ghToken); err != nil {
-			return err
+			return newCodeError(2, "GitHub resource validation failed", err)
 		}
 	}
 
@@ -203,7 +208,7 @@ func run(o *options) error {
 	if !isResume {
 		fmt.Printf("[INFO] Creating sandbox %s using template %s\n", sandboxName, o.template)
 		if err := r.CreateSandbox(sandboxName, o.template, o.pool, envVars); err != nil {
-			return fmt.Errorf("sandbox create failed: %w", err)
+			return newCodeError(10, "sandbox create failed", err)
 		}
 	} else {
 		fmt.Printf("[INFO] Resuming sandbox %s\n", sandboxName)
@@ -216,41 +221,41 @@ func run(o *options) error {
 		promptFile = "prompt_new.txt"
 	}
 	if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, promptFile), promptContent); err != nil {
-		return fmt.Errorf("transfer prompt: %w", err)
+		return newCodeError(11, "transfer prompt failed", err)
 	}
 	if mcpJSON != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "external_mcp.txt"), mcpJSON); err != nil {
-			return fmt.Errorf("transfer mcp: %w", err)
+			return newCodeError(11, "transfer mcp config failed", err)
 		}
 	}
 	if toolsJSON != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "tool_whitelist.txt"), toolsJSON); err != nil {
-			return fmt.Errorf("transfer tools: %w", err)
+			return newCodeError(11, "transfer tools whitelist failed", err)
 		}
 	}
 	if o.repo != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "github_repo.txt"), o.repo); err != nil {
-			return fmt.Errorf("transfer github repo: %w", err)
+			return newCodeError(11, "transfer github repo failed", err)
 		}
 	}
 	if o.ghToken != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "github_token.txt"), o.ghToken); err != nil {
-			return fmt.Errorf("transfer github token: %w", err)
+			return newCodeError(11, "transfer github token failed", err)
 		}
 	}
 	if o.branch != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "github_branch.txt"), o.branch); err != nil {
-			return fmt.Errorf("transfer branch: %w", err)
+			return newCodeError(11, "transfer branch failed", err)
 		}
 	}
 	if o.prNum != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "pr_number.txt"), o.prNum); err != nil {
-			return fmt.Errorf("transfer pr: %w", err)
+			return newCodeError(11, "transfer pr number failed", err)
 		}
 	}
 	if o.issueNum != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "issue_number.txt"), o.issueNum); err != nil {
-			return fmt.Errorf("transfer issue: %w", err)
+			return newCodeError(11, "transfer issue number failed", err)
 		}
 	}
 	actionType := ""
@@ -263,31 +268,31 @@ func run(o *options) error {
 	}
 	if actionType != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "action_type.txt"), actionType); err != nil {
-			return fmt.Errorf("transfer action type: %w", err)
+			return newCodeError(11, "transfer action type failed", err)
 		}
 	}
 	if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "task_mode.txt"), ternary(isResume, "resume", "create")); err != nil {
-		return fmt.Errorf("transfer task mode: %w", err)
+		return newCodeError(11, "transfer task mode failed", err)
 	}
 	if o.taskID != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "task_id.txt"), o.taskID); err != nil {
-			return fmt.Errorf("transfer task id: %w", err)
+			return newCodeError(11, "transfer task id failed", err)
 		}
 	}
 	if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "prompt_filename.txt"), promptFile); err != nil {
-		return fmt.Errorf("transfer prompt filename: %w", err)
+		return newCodeError(11, "transfer prompt filename failed", err)
 	}
 
 	// Agents
 	agentsDir := "/home/owner/.claude/agents"
 	if len(agents) > 0 {
 		if err := r.Mkdir(sandboxName, agentsDir); err != nil {
-			return fmt.Errorf("mkdir agents: %w", err)
+			return newCodeError(11, "create agents directory failed", err)
 		}
 		for _, a := range agents {
 			target := filepath.Join(agentsDir, a.name+".md")
 			if err := r.TransferContent(sandboxName, target, a.content); err != nil {
-				return fmt.Errorf("transfer agent %s: %w", a.name, err)
+				return newCodeError(11, fmt.Sprintf("transfer agent %s failed", a.name), err)
 			}
 		}
 	}
@@ -297,12 +302,40 @@ func run(o *options) error {
 	if strings.EqualFold(o.debug, "yes") {
 		fmt.Printf("[INFO] Debug mode enabled – executing worker…\n")
 		if err := r.Exec(sandboxName, "bash -i -c '~/claude/dev-worker/start-worker.sh'"); err != nil {
-			return fmt.Errorf("worker exec failed: %w", err)
+			return newCodeError(23, "worker exec failed", err)
 		}
 		fmt.Println("[SUCCESS] Worker finished")
+	} else {
+		// Start worker in background so CLI returns immediately
+		bgCmd := "bash -i -c 'setsid nohup bash -lc \"~/claude/dev-worker/start-worker.sh\" > ~/worker.log 2>&1 < /dev/null &'"
+		if err := r.Exec(sandboxName, bgCmd); err != nil {
+			return newCodeError(20, "failed to start worker in background", err)
+		} else {
+			fmt.Println("[INFO] Worker started in background (~/worker.log)")
+		}
 	}
 
 	return nil
+}
+
+// codeError allows mapping well-defined exit codes to error paths.
+type codeError struct {
+	code  int
+	msg   string
+	cause error
+}
+
+func (e *codeError) Error() string {
+	if e.cause != nil {
+		return fmt.Sprintf("%s: %v", e.msg, e.cause)
+	}
+	return e.msg
+}
+
+func (e *codeError) Unwrap() error { return e.cause }
+
+func newCodeError(code int, msg string, err error) error {
+	return &codeError{code: code, msg: msg, cause: err}
 }
 
 func isYesNo(v string) bool {
