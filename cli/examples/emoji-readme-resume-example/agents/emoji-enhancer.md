@@ -19,3 +19,5 @@ Guidelines:
 - Ensure emojis work across different platforms
 
 📝 IMPORTANT: After completing your enhancements, commit your changes with a descriptive message like 'docs: enhance README with emojis and formatting'
+
+🔎 Logging: After making changes, run `git status --porcelain` and `git diff --name-only` and print the output to the logs to show exactly which files changed.

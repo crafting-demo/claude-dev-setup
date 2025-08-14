@@ -40,6 +40,15 @@ Use an iterative approach with multiple rounds of feedback and revisions to demo
 **APPROACH:**
 Coordinate with the available agents through multiple iterations to deliver a polished, working feature. Each agent brings specialized expertise - use them strategically and don't hesitate to ask for revisions or improvements. The goal is to showcase how persistent sessions enable sophisticated back-and-forth collaboration between agents.
 
+**COMMIT POLICY (MANDATORY):**
+- After ANY change is applied by you or any subagent, immediately commit the change before proceeding.
+- Use:
+  ```bash
+  git add -A
+  git commit -m "feat: incremental CSV export work (describe specific change)"
+  ```
+- Do not leave the working tree dirty between steps.
+
 **COMPLETION REQUIREMENTS:**
 After all agents have completed their work and you've conducted the revision cycles to ensure a polished, working feature:
 

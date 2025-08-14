@@ -23,6 +23,15 @@ This is a follow-up task to the initial emoji enhancement. Add professional badg
 **APPROACH:**
 Use the badge-generator and structure-organizer subagents to add professional elements and improve the overall structure while preserving the visual enhancements from the previous task.
 
+**COMMIT POLICY (MANDATORY):**
+- After ANY change is applied by you or any subagent, immediately commit the change before proceeding.
+- Use:
+  ```bash
+  git add -A
+  git commit -m "docs: incremental README structure/badges update (describe specific change)"
+  ```
+- Do not leave the working tree dirty between steps.
+
 **COMPLETION REQUIREMENTS:**
 Once you have successfully added badges and improved structure:
 
