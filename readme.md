@@ -11,24 +11,13 @@ Launch developer agents in Crafting sandboxes using the `cs-cc` CLI. Create ephe
 - **Vertex AI support** — Use Claude models through GCP Vertex AI
 - **Crafting native** — All work happens in ephemeral sandboxes
 
-## Quick Start
+## What you can do
 
-1. **Create the template** in your Crafting dashboard named `claude-code-automation` using `claude-code-automation/template.yaml`
-2. **Set environment variables** in your sandbox with `ANTHROPIC_API_KEY` secret access
-3. **Build and run Go binaries**:
-   ```bash
-   # From claude-dev-setup root
-   make build
-   make test
-
-   # Run host CLI
-   go run ./cmd/cs-cc -p "Fix the login bug" --github-repo owner/repo --action-type branch --github-branch main --dry-run
-
-   # Run worker (uses CMD_DIR=/home/owner/cmd, STATE_PATH=~/state.json, SESSION_PATH=~/session.json by default)
-   go run ./cmd/worker
-   ```
-   # Prefer built binaries when available
-   ./bin/cs-cc -p prompt.txt --github-repo owner/repo --github-branch main --debug no
+- Create a fresh sandbox with an initial task (using a template and optional pool)
+- Queue additional tasks into a single sandbox to run sequentially
+- Run in debug mode (foreground, stream output) or non-debug mode (background)
+- Use a completion handler pattern to trigger scripts when work finishes
+- Specify a sandbox pool and template during creation
 
 ## Install on Linux
 
@@ -48,6 +37,100 @@ sudo wget -O /usr/local/bin/cs-cc "https://github.com/your-org/claude-dev-setup/
 ```bash
 install -Dm755 <(curl -L "https://github.com/your-org/claude-dev-setup/releases/latest/download/cs-cc_linux_amd64") "$HOME/.local/bin/cs-cc"
 ```
+
+## Quick Start
+
+1. Create the template in your Crafting dashboard named `claude-code-automation` using `claude-code-automation/template.yaml`
+2. Ensure sandbox env has `ANTHROPIC_API_KEY` access
+3. Run the CLI (binary):
+   ```bash
+   cs-cc -p "Fix the login bug" --github-repo owner/repo --action-type branch --github-branch main --dry-run
+   ```
+
+## Core workflows
+
+### Create a fresh sandbox with an initial task
+
+```bash
+# Create and run with a named sandbox, template, and optional pool
+cs-cc \
+  -p ./cli/examples/emoji-readme-example/orchestration-prompt.txt \
+  --github-repo owner/repo \
+  --action-type branch \
+  --github-branch main \
+  --template "claude-code-automation" \
+  --pool "standard" \
+  -n "cw-docs-demo" \
+  --debug yes
+```
+
+- --template: sandbox template name (default `claude-code-automation`)
+- --pool: optional pool name to create in a specific resource pool
+- --debug yes: run worker in foreground and stream output until completion
+
+To run in background (non-debug):
+
+```bash
+cs-cc \
+  -p ./cli/examples/fast-no-debug-example/orchestration-prompt.txt \
+  --github-repo owner/repo \
+  --github-branch main \
+  --template "claude-code-automation" \
+  -n "cw-fast-demo" \
+  --debug no \
+  -d no
+```
+
+This returns immediately and starts the worker in the sandbox. Logs stream to `~/worker.log` inside the sandbox.
+
+### Queue additional tasks into an existing sandbox (resume)
+
+After a sandbox exists (e.g., `cw-docs-demo`), queue another task into the same sandbox:
+
+```bash
+./bin/cs-cc \
+  -p "Add badges and improve README structure" \
+  --resume cw-docs-demo \
+  --task-id task-badges-001 \
+  --debug yes
+```
+
+Notes:
+- `--resume <sandbox>` reuses the same sandbox; `cs-cc` transfers `prompt_new.txt` and sets `task_mode.txt=resume`.
+- The worker will enqueue a new task (with the provided `--task-id` if set) and run it next.
+
+You can repeat `--resume` calls to add a queue of tasks. See `cli/examples/emoji-readme-resume-example`.
+
+## Completion handler
+
+After the worker finishes successfully, the dev worker calls a completion script if present:
+
+- Path: `/home/owner/completion.sh`
+- Arguments: the last task ID when available (from `~/state.json`)
+
+Invocation pattern (from the sandbox):
+
+```bash
+bash /home/owner/completion.sh "$TASK_ID"
+```
+
+Define the completion script in the sandbox template (not via CLI). For example, extend the template overlay to install the script during post-checkout:
+
+```yaml
+workspaces:
+    - name: claude
+      system:
+        files:
+          - path: /home/owner/completion.sh
+            owner: "1000:1000"
+            mode: "0755"
+            content: |
+              #!/usr/bin/env bash
+              TASK_ID="$1"
+              echo "Completed task: ${TASK_ID}" >> "$HOME/completed.log"
+```
+
+With this in place, the worker will invoke `/home/owner/completion.sh "$TASK_ID"` automatically on success.
 
 ## CLI Usage (Go)
 
@@ -80,7 +163,11 @@ Flags:
 
 ## Examples
 
-Comprehensive examples with multi-agent workflows, GitHub integration, and various configurations are available in the [cli directory](./cli/examples).
+Comprehensive examples with multi-agent workflows, GitHub integration, and various configurations are available in the [examples directory](./cli/examples/README.md):
+- `emoji-readme-example/`: simple single-task run
+- `emoji-readme-resume-example/`: two queued tasks in the same sandbox
+- `fast-no-debug-example/`: background mode and simple verification
+- `multi-agent-inventory-export/`: multi-agent, multi-step workflow
 
 ## Template Setup (Subagents by default)
 

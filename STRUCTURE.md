@@ -6,31 +6,43 @@ This document outlines the organized file structure for the Claude Dev Setup pro
 
 ```
 claude-dev-setup/
-├── cli/                          # Legacy shell-based CS-CC CLI and examples
-│   └── cs-cc                     # Legacy CLI entrypoint
+├── bin/                          # Built binaries (via make build)
+│   └── cs-cc                     # Go host CLI binary
+├── claude-code-automation/       # Sandbox template
+│   └── template.yaml
+├── cli/                          # Examples (shell workflows, agents, tool lists)
+│   └── examples                  # Example scenarios
 ├── cmd/                          # Go binaries (new)
 │   ├── cs-cc                     # Host orchestrator CLI (validation, planning)
+│   ├── taskstate                 # Taskstate helper CLI
 │   └── worker                    # Worker orchestration binary
-├── pkg/                          # Shared Go packages (new)
-│   ├── config                    # Contracts loader (/home/owner/cmd/*)
-│   ├── taskstate                 # JSON queue current/queue/history
-│   ├── worker                    # Minimal worker runner orchestration
-│   ├── permissions               # settings.local.json generation
-│   ├── mcp                       # Subagents interfaces + external MCP client hooks
-│   └── claude                    # Stream-JSON parsing helpers
 ├── dev-worker/                   # Worker scripts (shell integration retained)
+│   ├── configure_external_mcp.py # Configure external MCP servers from JSON
+│   ├── generate_permissions_json.py # Generate permissions JSON for Claude
+│   ├── process_tool_whitelist.py # Normalize tool whitelist inputs
 │   ├── setup-claude.sh           # Claude Code installation script
+│   ├── setup-go.sh               # Go toolchain bootstrap for worker
 │   ├── start-worker.sh           # Worker startup script (calls Go worker)
 │   └── task-state-manager.sh     # Legacy helper (being replaced by Go)
-├── claude-code-automation/       # Sandbox template
+├── pkg/                          # Shared Go packages (new)
+│   ├── claude                    # Stream-JSON parsing helpers
+│   ├── config                    # Contracts loader (/home/owner/cmd/*)
+│   ├── github                    # GitHub helpers
+│   ├── hostcli                   # Host CLI validation and planning
+│   ├── mcp                       # Subagents interfaces + external MCP client hooks
+│   ├── permissions               # settings.local.json generation
+│   ├── sandbox                   # Sandbox orchestration helpers
+│   ├── taskstate                 # JSON queue current/queue/history
+│   └── worker                    # Minimal worker runner orchestration
+├── go.mod, go.sum, Makefile      # Build and deps
 └── *.md, *.json                  # Documentation and config files
 ```
 
 ## 🚀 Component Overview
 
-### CLI (`/cmd/cs-cc` and `/cli`)
-- New Go CLI (`/cmd/cs-cc`): validates args and orchestrator contracts.
-- Legacy shell CLI (`/cli/cs-cc`): retained for compatibility and examples.
+### CLI (`/cmd/cs-cc` and `/bin`)
+- New Go CLI (`/cmd/cs-cc`): validates args and orchestrator contracts; built to `bin/cs-cc`.
+- Examples are provided under `/cli/examples` (no separate legacy CLI entrypoint).
 
 ### Subagents and MCP
 - Subagents: native Claude Code subagents are the default for internal tools.
@@ -45,11 +57,21 @@ claude-dev-setup/
 ### CLI Usage
 ```bash
 # From claude-dev-setup root
-./cli/cs-cc -p "prompt" -r "owner/repo" -ght "token" -pr 123
+make build
 
-# Add to PATH for global access
-export PATH="$PATH:/path/to/claude-dev-setup/cli"
-cs-cc --help
+# Run host CLI (Go)
+./bin/cs-cc --prompt "Fix the login bug" \
+  --github-repo owner/repo \
+  --action-type branch \
+  --github-branch main \
+  --dry-run
+
+# Or via go run
+go run ./cmd/cs-cc -p "Fix the login bug" \
+  --github-repo owner/repo \
+  --action-type branch \
+  --github-branch main \
+  --dry-run
 ```
 
 ### Subagents and External MCP

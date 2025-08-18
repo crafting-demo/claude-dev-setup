@@ -41,6 +41,20 @@ if [ -d "$HOME/claude" ]; then
 	print_status "Attempting Go worker path..."
 	if (cd "$HOME/claude" && go run ./cmd/worker); then
 		print_success "Go worker completed"
+		# Historical completion hook: call /home/owner/completion.sh with the last task ID if available
+		COMPLETION_SCRIPT="/home/owner/completion.sh"
+		if [ -x "$COMPLETION_SCRIPT" ] || [ -f "$COMPLETION_SCRIPT" ]; then
+			# Try to extract a task ID from state.json (current or last history entry)
+			TASK_ID=""
+			if command -v jq >/dev/null 2>&1 && [ -f "$HOME/state.json" ]; then
+				TASK_ID=$(jq -r '.current.id // empty | select(. != "")' "$HOME/state.json" 2>/dev/null)
+				if [ -z "$TASK_ID" ] || [ "$TASK_ID" = "null" ]; then
+					TASK_ID=$(jq -r '.history[-1].id // empty | select(. != "")' "$HOME/state.json" 2>/dev/null)
+				fi
+			fi
+			print_status "Running completion script: $COMPLETION_SCRIPT ${TASK_ID:+(task: $TASK_ID)}"
+			bash "$COMPLETION_SCRIPT" ${TASK_ID:+"$TASK_ID"} || print_error "Completion script failed"
+		fi
 		exit 0
 	else
 		print_error "Go worker failed; aborting per migration plan"
