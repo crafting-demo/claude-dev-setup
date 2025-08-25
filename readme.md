@@ -23,19 +23,11 @@ Launch developer agents in Crafting sandboxes using the `cs-cc` CLI. Create ephe
 
 Quick installs from the latest GitHub Release:
 
-- With curl (system-wide):
-```bash
-sudo curl -L -o /usr/local/bin/cs-cc "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.1.0/cs-cc" && sudo chmod +x /usr/local/bin/cs-cc
-```
-
-- With wget (system-wide):
-```bash
-sudo wget -O /usr/local/bin/cs-cc "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.1.0/cs-cc" && sudo chmod +x /usr/local/bin/cs-cc
-```
-
-- User-local (no sudo, one line):
+- User-local:
 ```bash
 install -Dm755 <(curl -L "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.1.0/cs-cc") "$HOME/.local/bin/cs-cc"
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
 ## Quick Start
