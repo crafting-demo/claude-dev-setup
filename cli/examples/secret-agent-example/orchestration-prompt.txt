@@ -1,0 +1,10 @@
+Use the subagent named "secret-agent" to retrieve the following favorites:
+
+- Favorite color
+- Favorite number
+- Favorite bird
+
+Return the result as a single JSON object with keys: color, number, bird.
+If you cannot actually invoke a subagent, respond exactly with NO_AGENT_INVOCATION.
+
+

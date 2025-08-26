@@ -1,74 +1,212 @@
-# Claude Code Dev Agent on Crafting
+# Claude Code Dev Agent on Crafting (CLI)
 
-This repo contains everything you need to setup a dev agent that uses Claude Code to interact with issues and PR comments in a GitHub repo.
+Launch developer agents in Crafting sandboxes using the `cs-cc` CLI. Create ephemeral development environments that can work on GitHub issues, pull requests, or branches with full Claude Code integration.
 
 ## Features
-- Issues -> PRs. Assign open issues to the dev agent and it will pull down the repo, cut a branch, do the work and open a PR against that issue.
-- PR comments -> Branch updates. Tag the dev agent in a PR comment with feedback and it will do the work and push an update to that PR.
-- Full support for Claude models on GCP through Vertex AI
-- Supports multiple concurrent background agents
-- Crafting native. All work happens within sandboxes on your Crafting account.
 
-## Demo
-<a href="https://www.loom.com/share/9832c4c481794c1d9a707c3c435f1b81">
-  <img width="500" alt="Screenshot 2025-07-08 at 1 30 06 PM" src="https://github.com/user-attachments/assets/f15e263c-84e7-4919-b2c9-13ebf8fb93d6" />
-</a>
+- **cs-cc** — Fast, robust CLI for launching agent sandboxes
+- **Direct CLI interface** — Launch agents without GitHub polling/watching
+- **GitHub integration** — Work on issues, PRs, or specific branches
+- **Multi-agent workflows** — Coordinate specialized subagents; external MCP servers are supported as clients
+- **Vertex AI support** — Use Claude models through GCP Vertex AI
+- **Crafting native** — All work happens in ephemeral sandboxes
 
+## What you can do
 
-## Sandbox Setup
+- Create a fresh sandbox with an initial task (using a template and optional pool)
+- Queue additional tasks into a single sandbox to run sequentially
+- Run in debug mode (foreground, stream output) or non-debug mode (background)
+- Use a completion handler pattern to trigger scripts when work finishes
+- Specify a sandbox pool and template during creation
 
-1. **Create the Claude Code Worker Template** In your Crafting dashboard, create a new template named `claude-code-automation` using the `template.yaml` file in `claude-code-automation` directory. 
-2. **Ensure the following Env vars are set** in the sandbox you want the dev agent orchestrator to work within.
-- **ANTHROPIC_API_KEY**: A path to your Anthropic API Key stored in a Crafting secret. Alternatively, if you wish to use Claude models running within GCP, follow the instructions below for Vertex AI.
-- **GITHUB_TOKEN**: A PAT that will provide the dev agent access to the repo you wan it to work on. To generate one, to GitHub and generate a Personal Access Token (PAT) for the repos you would like your dev agent to have access to. Make sure it has access to Actions, Contents, Issues, Pull Requests.
-3. **Update your sandbox YAML** to create a workspace configured for the orchestrator. Add the following under `workspaces`:
-```
-- name: cc-launcher
-    checkouts:
-      - path: claude-dev-setup
-        repo:
-          git: https://github.com/crafting-demo/claude-dev-setup.git
-    packages:
-      - name: nodejs
-        version: 22.14.0 # or some version over 20
-    env:
-      - SHELL=/bin/bash
-      - PATH=/usr/local/go/bin:/usr/local/node/bin:$PATH
+## Install on Linux
+
+Quick installs from the latest GitHub Release:
+
+- User-local:
+```bash
+install -Dm755 <(curl -L "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.2.0/cs-cc") "$HOME/.local/bin/cs-cc"
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-5. **Add target repos** Inside the cc-launcher workspace, go to `claude-dev-setup/gh-watcher/watchlist.txt` and add all the repos you want your dev agent to monitor. One per line. Ex. `crafting-test1/claude_test`.
-7. (optional) **Set the trigger phrase*** you would like to monitor for in the comments of your GitHub issues and Pull Requests. Edit `claude-dev-setup/gh-watcher/src/config.js` or using env var `TRIGGER_PHRASE`. Ex. `@crafting-code`
-8. **Pin your sandbox** so the orchestrator timed job can continue to regularly poll GitHub. The default poll time is every 5 minutes, but you can change that in `./sandbox/manifest.yaml`.
+## Quick Start
 
-## How it works
+1. Create the template in your Crafting dashboard named `claude-code-automation` using `claude-code-automation/template.yaml`
+2. Ensure sandbox env has `ANTHROPIC_API_KEY` access
+3. Run the CLI (binary):
+   ```bash
+   cs-cc -p "Fix the login bug" --github-repo owner/repo --github-branch main --dry-run
+   ```
 
-Once a comment is found in a PR or issues containing the trigger phase (default is **@crafting-code**), the orchestrator will spin up a worker sandbox using the `claude-code-automation` template, which will take the following steps.
+## Core workflows
 
-1. Install Claude Code, configured with your API Key (passed in from the Orchestrator as an env var), and give permissions for tool use.
-2. Clone the target repo
-3. If the comment was on an issue, it will cut a new branch related to that issue. If the comment was on a PR, it will switch to that branch.
-4. Fire up Claude Code, and create a prompt from the full GitHub context. For a PR comment it will use the context of the comment + file name + line number (if specified). For an issue, it will use the context of the issue name, body and triggering comment.
-5. After Claude Code completes the work, it will commit changes and then: If Issue: Create a PR with a description of changes, or, if PR comment, push changes to the branch and leave a comment about updates.
-6. After changes are made, the action is logged is in `gh-watcher/state.json` so that work is not re-triggered in subsequent runs.
-7. If the orchestrator is not in debug mode, the dev worker will be destroyed upon completing it's task.
+### Create a fresh sandbox with an initial task
 
-## Debug mode
-You can run a dev worker synchronously by opening a terminal on the cc-launcher workspace, cd'ing to `claude-dev-setup/gh-watcher` and running `npm run watch -- --debug` to perform a single poll of the repos specified in your watchlist. Note: You will have to manually delete the worker sandbox yourself this way.
+```bash
+# Create and run with a named sandbox, template, and optional pool
+cs-cc \
+  -p ./cli/examples/emoji-readme-example/orchestration-prompt.txt \
+  --github-repo owner/repo \
+  --github-branch main \
+  --template "claude-code-automation" \
+  --pool "standard" \
+  -n "cw-docs-demo" \
+  --debug yes
+```
 
-## Using Claude models inside of GCP with Vertex AI 
+- --template: sandbox template name (default `claude-code-automation`)
+- --pool: optional pool name to create in a specific resource pool
+- --debug yes: run worker in foreground and stream output until completion
 
-Follow the instructions below to use Verex AI
+To run in background (non-debug):
 
-1. Make sure Vertex AI and Claude models are enabled in your GCP account. Requirements are:
-- A Google Cloud Platform (GCP) account with billing enabled
-- A GCP project with Vertex AI API enabled
-- Access to desired Claude models (e.g., Claude Sonnet 4)
-- Quota allocated in desired GCP region
+```bash
+cs-cc \
+  -p ./cli/examples/fast-no-debug-example/orchestration-prompt.txt \
+  --github-repo owner/repo \
+  --github-branch main \
+  --template "claude-code-automation" \
+  -n "cw-fast-demo" \
+  --debug no \
+  -d no
+```
 
-2. Create a GCP service account with roles: `AI Platform Developer` and `Vertex AI User`. 
-3. Create a JSON key and add it as a secret in Crafting, ex `gcp-vertex-key.json`
-4. Add the following env vars to `claude-code-automation/template.yaml`:
-- GOOGLE_APPLICATION_CREDENTIALS=/run/sandbox/fs/secrets/shared/gcp-vertex-key.json
-- ANTHROPIC_VERTEX_PROJECT_ID=YOUR-GCP-PROJECT-ID
-- CLAUDE_CODE_USE_VERTEX=1
-- CLOUD_ML_REGION=us-east5
+This returns immediately and starts the worker in the sandbox. Logs stream to `~/worker.log` inside the sandbox.
+
+### Queue additional tasks into an existing sandbox (resume)
+
+After a sandbox exists (e.g., `cw-docs-demo`), queue another task into the same sandbox:
+
+```bash
+./bin/cs-cc \
+  -p "Add badges and improve README structure" \
+  --resume cw-docs-demo \
+  --task-id task-badges-001 \
+  --debug yes
+```
+
+Notes:
+- `--resume <sandbox>` reuses the same sandbox; `cs-cc` transfers `prompt_new.txt` and sets `task_mode.txt=resume`.
+- The worker will enqueue a new task (with the provided `--task-id` if set) and run it next.
+
+You can repeat `--resume` calls to add a queue of tasks. See `cli/examples/emoji-readme-resume-example`.
+
+## Completion handler
+
+After the worker finishes successfully, the dev worker calls a completion script if present:
+
+- Path: `/home/owner/completion.sh`
+- Arguments: the last task ID when available (from `~/state.json`)
+
+Invocation pattern (from the sandbox):
+
+```bash
+bash /home/owner/completion.sh "$TASK_ID"
+```
+
+Define the completion script in the sandbox template (not via CLI). For example, extend the template overlay to install the script during post-checkout:
+
+```yaml
+workspaces:
+    - name: claude
+      system:
+        files:
+          - path: /home/owner/completion.sh
+            owner: "1000:1000"
+            mode: "0755"
+            content: |
+              #!/usr/bin/env bash
+              TASK_ID="$1"
+              echo "Completed task: ${TASK_ID}" >> "$HOME/completed.log"
+```
+
+With this in place, the worker will invoke `/home/owner/completion.sh "$TASK_ID"` automatically on success.
+
+## CLI Usage (Go)
+
+```
+cs-cc (Go) - Claude Sandbox Code CLI
+
+Flags:
+  -p, --prompt string              Prompt string or file path (required)
+      --github-repo string         GitHub repository (owner/repo)
+      --github-branch string       Git branch (optional; defaults to repo default branch)
+      --mcp-config string          External MCP config JSON string or file path
+      --agents-dir string          Directory containing agent .md files
+  -t, --tools string               Tool whitelist JSON string or file path
+      --template string            Sandbox template name (default "claude-code-automation")
+  -d, --delete-when-done string    Delete sandbox when done: yes|no (default "yes")
+  -n, --name string                Sandbox name (auto-generated if empty)
+      --resume string              Resume existing sandbox (skips creation)
+      --task-id string             Custom task ID (optional)
+      --repo-path string           Custom repo path inside sandbox
+      --pool string                Sandbox pool name (optional)
+      --github-token string        GitHub access token (optional; Crafting creds fallback)
+      --cmd-dir string             Path to /home/owner/cmd (default "/home/owner/cmd")
+      --debug string               Debug mode: yes|no (default "no")
+      --dry-run                    Validate and print planned actions without executing
+      --version                    Print version and exit
+```
+
+## Examples
+
+Comprehensive examples with multi-agent workflows, GitHub integration, and various configurations are available in the [examples directory](./cli/examples/README.md):
+- `emoji-readme-example/`: simple single-task run
+- `emoji-readme-resume-example/`: two queued tasks in the same sandbox
+- `fast-no-debug-example/`: background mode and simple verification
+- `multi-agent-inventory-export/`: multi-agent, multi-step workflow
+
+## Template Setup (Subagents by default)
+
+1. **Create the Claude Code Worker Template** in your Crafting dashboard named `claude-code-automation` using the `template.yaml` file in the `claude-code-automation/` directory
+2. **Set environment variables** - Ensure `ANTHROPIC_API_KEY` is configured as a Crafting secret path in your sandbox environment
+
+## Using Claude models with GCP Vertex AI
+
+To use Claude models through GCP Vertex AI instead of direct Anthropic API:
+
+1. **Enable Vertex AI** with Claude models in your GCP account
+2. **Create a service account** with `AI Platform Developer` and `Vertex AI User` roles
+3. **Add the service account JSON key** as a Crafting secret (e.g., `gcp-vertex-key.json`)
+4. **Configure environment variables** in `claude-code-automation/template.yaml`:
+   ```yaml
+   - GOOGLE_APPLICATION_CREDENTIALS=/run/sandbox/fs/secrets/shared/gcp-vertex-key.json
+   - ANTHROPIC_VERTEX_PROJECT_ID=YOUR-GCP-PROJECT-ID
+   - CLAUDE_CODE_USE_VERTEX=1
+   - CLOUD_ML_REGION=us-east5
+   ```
+
+## Testing
+
+- Run all tests: `make test`
+- Unit tests cover:
+  - `pkg/config` loader for `/home/owner/cmd` contracts
+  - `pkg/hostcli` validation of GitHub action context
+  - `pkg/taskstate` queue and transitions
+  - `pkg/worker` runner session linkage and completion
+  - `pkg/permissions` and `pkg/mcp` basic behaviors
+  - `cmd/cs-cc` dry-run flag handling and transfer previews
+
+Planned: add integration tests to simulate end-to-end worker execution producing `~/session.json`, `~/state.json`, and `<repo>/.claude/settings.local.json`.
+
+## Binaries
+
+Built artifacts are placed in `bin/` by `make build` targets:
+
+- `bin/cs-cc` — Go host CLI
+- `bin/worker` — Go worker entrypoint
+
+Use `make cs-cc` and `make worker` for explicit builds.
+
+## Exit codes
+
+The CLI uses explicit exit codes to make failure modes obvious:
+
+- 0: success
+- 2: validation error (args/contracts)
+- 10: sandbox create/resume failure
+- 11: file transfer failure (including agents copy)
+- 20: worker bootstrap/background start failure (non-debug)
+- 23: worker execution failure (debug mode)
+- 30: unexpected error
