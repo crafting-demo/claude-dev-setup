@@ -15,6 +15,10 @@ import (
 	"github.com/your-org/claude-dev-setup/pkg/taskstate"
 )
 
+// lastConciseSubagent tracks the most recent subagent name seen in a tool_use
+// event so that the subsequent tool_result can be annotated consistently.
+var lastConciseSubagent string
+
 // RunClaudeStream executes `claude` with stream-json in the provided repoDir,
 // writes session.json when sessionId appears, and updates task state.
 //
@@ -150,26 +154,39 @@ func printConciseEvent(v any) {
 		switch typ {
 		case "text":
 			if t, _ := part["text"].(string); strings.TrimSpace(t) != "" {
-				fmt.Printf("🤖 Claude: %q\n", truncateString(t, 240))
+				fmt.Printf("🤖 Claude: %q\n", t)
 			}
 		case "tool_use":
 			name, _ := part["name"].(string)
 			input, _ := part["input"].(map[string]any)
+			// Detect subagent context
+			prefix := ""
+			if sa, ok := input["subagent_type"].(string); ok && strings.TrimSpace(sa) != "" {
+				lastConciseSubagent = sa
+				prefix = "[" + sa + "] "
+			} else {
+				lastConciseSubagent = ""
+			}
 			summary := summarizeToolInput(input)
 			if summary != "" {
-				fmt.Printf("🔧 tool_use: %s - %s\n", name, summary)
+				fmt.Printf("🔧 %stool_use: %s - %s\n", prefix, name, summary)
 			} else {
-				fmt.Printf("🔧 tool_use: %s\n", name)
+				fmt.Printf("🔧 %stool_use: %s\n", prefix, name)
 			}
 		case "tool_result":
 			isErr, _ := part["is_error"].(bool)
 			// Try common result shapes
 			if txt, _ := part["content"].(string); txt != "" {
-				status := "ok"
+				emoji := "🟢"
 				if isErr {
-					status = "error"
+					emoji = "🔴"
 				}
-				fmt.Printf("tool_result: %s, %q\n", status, truncateString(txt, 240))
+				prefix := ""
+				if lastConciseSubagent != "" {
+					prefix = "[" + lastConciseSubagent + "] "
+					lastConciseSubagent = ""
+				}
+				fmt.Printf("%s %stool_result: %q\n", emoji, prefix, txt)
 			}
 		}
 	}
@@ -180,9 +197,6 @@ func summarizeToolInput(in map[string]any) string {
 		return ""
 	}
 	// Common fields
-	if sa, ok := in["subagent_type"].(string); ok && sa != "" {
-		return fmt.Sprintf("subagent=%s", sa)
-	}
 	if fp, ok := in["file_path"].(string); ok && fp != "" {
 		return fmt.Sprintf("file=%s", fp)
 	}
