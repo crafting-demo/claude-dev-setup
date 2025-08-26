@@ -12,12 +12,12 @@ import (
 
 // Runner provides thin wrappers over Crafting CLI commands (cs exec/scp/sandbox).
 // All operations are non-interactive and suitable for automation.
-type Runner struct{}
+type Runner struct{ workspace string }
 
-func NewRunner() *Runner { return &Runner{} }
+func NewRunner(workspace string) *Runner { return &Runner{workspace: workspace} }
 
 // CreateSandbox creates a new sandbox using the provided template and optional pool.
-// envVars map will be translated to `-D 'claude/env[KEY]=VALUE'` entries.
+// envVars map will be translated to `-D '<workspace>/env[KEY]=VALUE'` entries.
 func (r *Runner) CreateSandbox(sandboxName, template, pool string, envVars map[string]string) error {
 	if sandboxName == "" || template == "" {
 		return fmt.Errorf("sandbox name and template are required")
@@ -33,12 +33,12 @@ func (r *Runner) CreateSandbox(sandboxName, template, pool string, envVars map[s
 	return runWithRetries(run, 5, 2*time.Second)
 }
 
-// Exec runs a command inside the sandbox as user 1000 within the `claude` workspace.
+// Exec runs a command inside the sandbox as user 1000 within the configured workspace.
 func (r *Runner) Exec(sandboxName string, command string) error {
 	if sandboxName == "" || strings.TrimSpace(command) == "" {
 		return fmt.Errorf("sandbox and command are required")
 	}
-	args := []string{"exec", "-t", "-u", "1000", "-W", sandboxName + "/claude", "--", "bash", "-lc", command}
+	args := []string{"exec", "-t", "-u", "1000", "-W", sandboxName + "/" + r.workspace, "--", "bash", "-lc", command}
 	run := func() error {
 		cmd := exec.Command("cs", args...)
 		cmd.Stdout = os.Stdout
@@ -74,7 +74,7 @@ func (r *Runner) TransferContent(sandboxName, targetPath, content string) error 
 	}
 	defer os.Remove(tmpFile)
 
-	args := []string{"scp", tmpFile, fmt.Sprintf("%s/claude:%s", sandboxName, targetPath)}
+	args := []string{"scp", tmpFile, fmt.Sprintf("%s/%s:%s", sandboxName, r.workspace, targetPath)}
 	run := func() error {
 		cmd := exec.Command("cs", args...)
 		cmd.Stdout = os.Stdout
@@ -120,7 +120,7 @@ func (r *Runner) buildCreateArgs(sandboxName, template, pool string, envVars map
 	sort.Strings(keys)
 	for _, k := range keys {
 		v := envVars[k]
-		entry := fmt.Sprintf("claude/env[%s]=%s", k, v)
+		entry := fmt.Sprintf("%s/env[%s]=%s", r.workspace, k, v)
 		args = append(args, "-D", entry)
 	}
 	return args

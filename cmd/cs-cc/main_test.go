@@ -28,6 +28,7 @@ func TestRun_DryRun_BranchFlags(t *testing.T) {
 		debug:          "yes",
 		customRepoPath: "workdir",
 		dryRun:         true,
+		workspace:      "claude",
 	}
 	_, err := captureOutput(t, func() error { return run(opts) })
 	if err != nil {
@@ -44,7 +45,7 @@ func TestRun_DryRun_AgentsDir(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(agents, "one.md"), []byte("hello"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	opts := &options{prompt: "x", agentsDir: agents, dryRun: true, resume: "r", deleteWhenDone: "yes", debug: "no"}
+	opts := &options{prompt: "x", agentsDir: agents, dryRun: true, resume: "r", deleteWhenDone: "yes", debug: "no", workspace: "claude"}
 	_, err := captureOutput(t, func() error { return run(opts) })
 	if err != nil {
 		t.Fatalf("run: %v", err)
@@ -52,11 +53,11 @@ func TestRun_DryRun_AgentsDir(t *testing.T) {
 }
 
 func TestRun_InvalidYesNo(t *testing.T) {
-	opts := &options{prompt: "x", deleteWhenDone: "maybe", dryRun: true}
+	opts := &options{prompt: "x", deleteWhenDone: "maybe", dryRun: true, workspace: "claude"}
 	if err := run(opts); err == nil {
 		t.Fatalf("expected error for invalid delete-when-done")
 	}
-	opts2 := &options{prompt: "x", deleteWhenDone: "yes", debug: "maybe", dryRun: true}
+	opts2 := &options{prompt: "x", deleteWhenDone: "yes", debug: "maybe", dryRun: true, workspace: "claude"}
 	if err := run(opts2); err == nil {
 		t.Fatalf("expected error for invalid debug")
 	}

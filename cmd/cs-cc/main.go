@@ -62,6 +62,11 @@ func main() {
 	rootCmd.Flags().StringVar(&opts.debug, "debug", "no", "Debug mode: yes|no")
 	rootCmd.Flags().StringVar(&opts.customRepoPath, "repo-path", "", "Custom repo path inside sandbox (optional)")
 	rootCmd.Flags().BoolVar(&opts.dryRun, "dry-run", false, "Validate and print planned actions without executing")
+	// Short version flag (-v) to print version and exit
+	rootCmd.Flags().BoolVarP(&opts.showVersion, "version", "v", false, "Print version and exit")
+	// Workspace (required)
+	rootCmd.Flags().StringVar(&opts.workspace, "workspace", "", "Workspace name (required)")
+	_ = rootCmd.MarkFlagRequired("workspace")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "[ERROR] %v\n", err)
@@ -94,11 +99,21 @@ type options struct {
 	debug          string
 	customRepoPath string
 	dryRun         bool
+	showVersion    bool
+	workspace      string
 }
 
 func run(o *options) error {
+	// Handle explicit version flag early
+	if o.showVersion {
+		fmt.Println(version)
+		return nil
+	}
 	if strings.TrimSpace(o.prompt) == "" {
 		return newCodeError(2, "prompt (-p) is required", nil)
+	}
+	if strings.TrimSpace(o.workspace) == "" {
+		return newCodeError(2, "workspace is required", nil)
 	}
 	if !isYesNo(o.deleteWhenDone) {
 		return newCodeError(2, "delete-when-done must be yes|no", nil)
@@ -177,7 +192,7 @@ func run(o *options) error {
 
 	// Dry-run
 	if o.dryRun {
-		r := sandbox.NewRunner()
+		r := sandbox.NewRunner(o.workspace)
 		if !isResume {
 			// Build and show exact create command only for create mode (parity with legacy CLI)
 			createCmd := r.BuildCreateCommand(firstNonEmpty(o.name, generateSandboxName(o.repo, "dev")), o.template, o.pool, envVars)
@@ -188,7 +203,7 @@ func run(o *options) error {
 		return nil
 	}
 
-	r := sandbox.NewRunner()
+	r := sandbox.NewRunner(o.workspace)
 	if !isResume {
 		fmt.Printf("[INFO] Creating sandbox %s using template %s\n", sandboxName, o.template)
 		if err := r.CreateSandbox(sandboxName, o.template, o.pool, envVars); err != nil {

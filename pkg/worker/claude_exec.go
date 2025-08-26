@@ -51,6 +51,10 @@ func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, 
 	}
 	cmd := exec.Command("claude", args...)
 	cmd.Dir = repoDir
+	if debug {
+		// Print the repository directory where Claude will be executed
+		fmt.Printf("[INFO] Running Claude in repo directory: %s\n", repoDir)
+	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err
@@ -62,6 +66,10 @@ func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, 
 
 	scanner := bufio.NewScanner(stdout)
 	var sessionId string
+	streamFormat := strings.ToLower(strings.TrimSpace(os.Getenv("CSCC_STREAM_FORMAT")))
+	if streamFormat == "" && debug {
+		streamFormat = "concise"
+	}
 	for scanner.Scan() {
 		line := scanner.Text()
 		var obj any
@@ -75,10 +83,14 @@ func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, 
 				}
 			}
 			if debug {
-				// Truncate long strings and pretty print
-				trimmed := truncateLongStrings(obj, 400)
-				pretty := mustPrettyJSON(trimmed)
-				fmt.Printf("%s\n", pretty)
+				if streamFormat == "concise" {
+					printConciseEvent(obj)
+				} else {
+					// Truncate long strings and pretty print
+					trimmed := truncateLongStrings(obj, 400)
+					pretty := mustPrettyJSON(trimmed)
+					fmt.Printf("%s\n", pretty)
+				}
 			}
 		} else {
 			// Not JSON – print raw when in debug
@@ -109,6 +121,92 @@ func RunClaudeStream(homeDir, repoDir, prompt string, state *taskstate.Manager, 
 		return err
 	}
 	return cmd.Wait()
+}
+
+// printConciseEvent prints a compact summary of stream-json events:
+// - assistant preambles (message text)
+// - tool_use: name and key input summary (file_path, command, subagent_type, etc.)
+// - tool_result: success/error with brief content
+func printConciseEvent(v any) {
+	m, ok := v.(map[string]any)
+	if !ok {
+		return
+	}
+	// Messages carry most interesting events
+	msg, ok := m["message"].(map[string]any)
+	if !ok {
+		return
+	}
+	content, ok := msg["content"].([]any)
+	if !ok {
+		return
+	}
+	for _, it := range content {
+		part, ok := it.(map[string]any)
+		if !ok {
+			continue
+		}
+		typ, _ := part["type"].(string)
+		switch typ {
+		case "text":
+			if t, _ := part["text"].(string); strings.TrimSpace(t) != "" {
+				fmt.Printf("🤖 Claude: %q\n", truncateString(t, 240))
+			}
+		case "tool_use":
+			name, _ := part["name"].(string)
+			input, _ := part["input"].(map[string]any)
+			summary := summarizeToolInput(input)
+			if summary != "" {
+				fmt.Printf("🔧 tool_use: %s - %s\n", name, summary)
+			} else {
+				fmt.Printf("🔧 tool_use: %s\n", name)
+			}
+		case "tool_result":
+			isErr, _ := part["is_error"].(bool)
+			// Try common result shapes
+			if txt, _ := part["content"].(string); txt != "" {
+				status := "ok"
+				if isErr {
+					status = "error"
+				}
+				fmt.Printf("tool_result: %s, %q\n", status, truncateString(txt, 240))
+			}
+		}
+	}
+}
+
+func summarizeToolInput(in map[string]any) string {
+	if in == nil {
+		return ""
+	}
+	// Common fields
+	if sa, ok := in["subagent_type"].(string); ok && sa != "" {
+		return fmt.Sprintf("subagent=%s", sa)
+	}
+	if fp, ok := in["file_path"].(string); ok && fp != "" {
+		return fmt.Sprintf("file=%s", fp)
+	}
+	if cmd, ok := in["command"].(string); ok && cmd != "" {
+		return fmt.Sprintf("cmd=%s", truncateString(cmd, 120))
+	}
+	if p, ok := in["path"].(string); ok && p != "" {
+		return fmt.Sprintf("path=%s", p)
+	}
+	if prompt, ok := in["prompt"].(string); ok && prompt != "" {
+		return fmt.Sprintf("prompt=%s", truncateString(prompt, 120))
+	}
+	return ""
+}
+
+func truncateString(s string, max int) string {
+	if utf8.RuneCountInString(s) <= max {
+		return s
+	}
+	rs := []rune(s)
+	if len(rs) > max {
+		return string(rs[:max]) + "…"
+	}
+	return s
 }
 
 // truncateLongStrings walks an arbitrary JSON-like structure and truncates long string values.

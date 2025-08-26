@@ -25,7 +25,7 @@ Quick installs from the latest GitHub Release:
 
 - User-local:
 ```bash
-install -Dm755 <(curl -L "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.1.0/cs-cc") "$HOME/.local/bin/cs-cc"
+install -Dm755 <(curl -L "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.2.0/cs-cc") "$HOME/.local/bin/cs-cc"
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
