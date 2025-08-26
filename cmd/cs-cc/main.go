@@ -167,7 +167,6 @@ func run(o *options) error {
 	envVars := map[string]string{
 		"SHOULD_DELETE":      yesNoToBool(o.deleteWhenDone),
 		"DEBUG_MODE":         yesNoToBool(o.debug),
-		"ANTHROPIC_API_KEY":  "${secret:shared/anthropic-apikey-eng}",
 		"GH_PROMPT_DISABLED": "1",
 	}
 	if o.customRepoPath != "" {
