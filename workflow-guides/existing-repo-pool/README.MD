@@ -7,7 +7,7 @@ This guide explains how to use cs-cc to delegate tasks to Claude Code dev agents
 1. Add the `claude-dev-setup` checkout to your sandbox pool template to ensure that the worker scripts cs-cc relies on will be properly configured within your target workspace. We'll refer to this as `sb-pool-template` and the pool that uses it as `sb-pool`.
 ```
 workspaces:
-  - name: workspace-name
+  - name: ai-ws
     # 1. Add checkout below to setup claude code worker
     checkouts:
       - path: claude
@@ -161,10 +161,10 @@ cs-cc \
   --repo-path "existing-repo" \
   --template "template-name" \
   --pool "claude-dev-pool" \
-  --agents-dir "$AGENTS_DIR" \ 
   -t "allowed-tools.json" \
   -n "sb-name" \
-  --debug yes
+  --debug yes \
+  --workspace "ai-ws" # This must match the workspace name from your template
   ```
 
 ## Step 6 (optional): Create a follow up task on the same sandbox
