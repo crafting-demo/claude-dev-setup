@@ -166,3 +166,14 @@ cs-cc \
   --debug yes \
   --workspace "ai-ws" # This must match the workspace name from your template
   ```
+
+## Step 6 (optional): Create a follow up task on the same sandbox
+```bash
+cs-cc \
+  --resume "sb-name" \
+  -p prompt2.txt \
+  -t "allowed-tools.json" \
+  --task-id "badges-structure-task" \
+  --debug yes
+  --workspace "ai-ws"
+  ```

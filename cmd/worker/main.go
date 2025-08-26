@@ -36,8 +36,17 @@ func main() {
 		// Also reuse previously set GITHUB_TOKEN from environment (sandbox persists env between runs)
 		if os.Getenv("GITHUB_TOKEN") == "" {
 			if b, err := os.ReadFile(filepath.Join(cmdDir, "github_token.txt")); err == nil {
-				os.Setenv("GITHUB_TOKEN", strings.TrimSpace(string(b)))
+				tok := strings.TrimSpace(string(b))
+				if tok != "" {
+					os.Setenv("GITHUB_TOKEN", tok)
+					if os.Getenv("GH_TOKEN") == "" {
+						os.Setenv("GH_TOKEN", tok)
+					}
+				}
 			}
+		} else if os.Getenv("GH_TOKEN") == "" {
+			// Mirror an existing GITHUB_TOKEN into GH_TOKEN for gh CLI compatibility
+			os.Setenv("GH_TOKEN", os.Getenv("GITHUB_TOKEN"))
 		}
 		if os.Getenv("GITHUB_REPO") == "" && cfg.GitHub.Repo == "" {
 			if b, err := os.ReadFile(filepath.Join(cmdDir, "github_repo.txt")); err == nil {
@@ -51,7 +60,9 @@ func main() {
 		}
 
 		// Authenticate with GitHub if possible (token presence only logged elsewhere)
-		_ = worker.EnsureGitHubAuth()
+		if err := worker.EnsureGitHubAuth(); err != nil {
+			fmt.Fprintf(os.Stderr, "[WARNING] gh auth status: %v\n", err)
+		}
 		// Prepare repository only when we have repo/branch context AND when no custom repo path is provided
 		repo := cfg.GitHub.Repo
 		if repo == "" {
