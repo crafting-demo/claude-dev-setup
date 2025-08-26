@@ -49,7 +49,7 @@ workspaces:
 
 ## Step 1: Install cs-cc on the host sandbox
 ```bash
-install -Dm755 <(curl -L "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.3.2/cs-cc") "$HOME/.local/bin/cs-cc"
+install -Dm755 <(curl -L "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.3.2/cs-cc-linux-amd64") "$HOME/.local/bin/cs-cc"
 echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
 source ~/.bashrc
 ```
