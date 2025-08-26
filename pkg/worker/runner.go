@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/your-org/claude-dev-setup/pkg/config"
@@ -27,7 +28,7 @@ func (r *Runner) Run(cmdDir, statePath, sessionPath string) error {
 	}
 
 	// Load config (safe summary printed by caller if needed)
-	_, err := config.LoadFromDir(cmdDir)
+	cfg, err := config.LoadFromDir(cmdDir)
 	if err != nil {
 		return fmt.Errorf("load config: %w", err)
 	}
@@ -74,8 +75,11 @@ func (r *Runner) Run(cmdDir, statePath, sessionPath string) error {
 	// If no current task and we have a prompt, enqueue and start
 	st = mgr.GetState()
 	if st.Current == nil && prompt != "" {
-		// generate simple ID
-		id := fmt.Sprintf("task-%d", time.Now().Unix())
+		// Prefer provided task ID when present; otherwise generate one
+		id := cfg.TaskID
+		if strings.TrimSpace(id) == "" {
+			id = fmt.Sprintf("task-%d", time.Now().Unix())
+		}
 		mgr.Enqueue(taskstate.Task{ID: id})
 		mgr.StartNext()
 	}
@@ -90,32 +94,32 @@ func (r *Runner) Run(cmdDir, statePath, sessionPath string) error {
 		repoDir = filepath.Join(os.Getenv("HOME"), "claude", "target-repo")
 	}
 
-    // Execute Claude stream-json in the repo directory
-    if st := mgr.GetState(); st.Current != nil && prompt != "" {
-        debug := os.Getenv("DEBUG_MODE") == "true"
-        // Derive allowed/disallowed tools from whitelist
-        allowedTools, _ := ParseToolsFromWhitelist(cmdDir)
-        // If Task is not explicitly allowed, disallow it to force Write/Edit usage
-        disallowed := []string{}
-        hasTask := false
-        for _, t := range allowedTools {
-            if t == "Task" {
-                hasTask = true
-                break
-            }
-        }
-        if !hasTask {
-            disallowed = append(disallowed, "Task")
-        }
-        permMode := os.Getenv("CLAUDE_PERMISSION_MODE")
-        if permMode == "" {
-            permMode = "default"
-        }
-        if err := RunClaudeStream(os.Getenv("HOME"), repoDir, prompt, mgr, debug, allowedTools, disallowed, permMode); err != nil {
-            // If Claude is unavailable in unit tests, fall back to completing current
-            mgr.CompleteCurrent("done")
-        }
-    }
+	// Execute Claude stream-json in the repo directory
+	if st := mgr.GetState(); st.Current != nil && prompt != "" {
+		debug := os.Getenv("DEBUG_MODE") == "true"
+		// Derive allowed/disallowed tools from whitelist
+		allowedTools, _ := ParseToolsFromWhitelist(cmdDir)
+		// If Task is not explicitly allowed, disallow it to force Write/Edit usage
+		disallowed := []string{}
+		hasTask := false
+		for _, t := range allowedTools {
+			if t == "Task" {
+				hasTask = true
+				break
+			}
+		}
+		if !hasTask {
+			disallowed = append(disallowed, "Task")
+		}
+		permMode := os.Getenv("CLAUDE_PERMISSION_MODE")
+		if permMode == "" {
+			permMode = "default"
+		}
+		if err := RunClaudeStream(os.Getenv("HOME"), repoDir, prompt, mgr, debug, allowedTools, disallowed, permMode); err != nil {
+			// If Claude is unavailable in unit tests, fall back to completing current
+			mgr.CompleteCurrent("done")
+		}
+	}
 
 	// Persist
 	if err := mgr.Save(); err != nil {
