@@ -5,12 +5,11 @@ import (
 	"testing"
 )
 
-func TestValidate_BranchSuccess(t *testing.T) {
+func TestValidate_MinimalSuccess(t *testing.T) {
 	tmp := t.TempDir()
 	a := Args{
 		CmdDir:     tmp,
 		GitHubRepo: "org/repo",
-		ActionType: ActionBranch,
 		Branch:     "main",
 	}
 	if err := Validate(a); err != nil {
@@ -19,33 +18,9 @@ func TestValidate_BranchSuccess(t *testing.T) {
 }
 
 func TestValidate_MissingCmdDir(t *testing.T) {
-	a := Args{CmdDir: "", GitHubRepo: "org/repo", ActionType: ActionBranch, Branch: "x"}
+	a := Args{CmdDir: "", GitHubRepo: "org/repo", Branch: "x"}
 	if err := Validate(a); err == nil {
 		t.Fatalf("expected error for missing cmd dir")
-	}
-}
-
-func TestValidate_InvalidAction(t *testing.T) {
-	tmp := t.TempDir()
-	a := Args{CmdDir: tmp, GitHubRepo: "org/repo", ActionType: ActionType("bogus")}
-	if err := Validate(a); err == nil {
-		t.Fatalf("expected error for invalid action type")
-	}
-}
-
-func TestValidate_PRRequiresNumber(t *testing.T) {
-	tmp := t.TempDir()
-	a := Args{CmdDir: tmp, GitHubRepo: "org/repo", ActionType: ActionPR}
-	if err := Validate(a); err == nil {
-		t.Fatalf("expected error for missing pr-number")
-	}
-}
-
-func TestValidate_IssueRequiresNumber(t *testing.T) {
-	tmp := t.TempDir()
-	a := Args{CmdDir: tmp, GitHubRepo: "org/repo", ActionType: ActionIssue}
-	if err := Validate(a); err == nil {
-		t.Fatalf("expected error for missing issue-number")
 	}
 }
 
@@ -59,7 +34,7 @@ func TestValidate_CmdDirMustExist(t *testing.T) {
 	if err := os.Remove(path); err != nil {
 		t.Fatalf("prep: %v", err)
 	}
-	a := Args{CmdDir: path, GitHubRepo: "org/repo", ActionType: ActionBranch, Branch: "x"}
+	a := Args{CmdDir: path, GitHubRepo: "org/repo", Branch: "x"}
 	if err := Validate(a); err == nil {
 		t.Fatalf("expected error for non-existent cmd dir")
 	}

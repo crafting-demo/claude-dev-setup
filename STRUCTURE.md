@@ -22,8 +22,7 @@ claude-dev-setup/
 │   ├── process_tool_whitelist.py # Normalize tool whitelist inputs
 │   ├── setup-claude.sh           # Claude Code installation script
 │   ├── setup-go.sh               # Go toolchain bootstrap for worker
-│   ├── start-worker.sh           # Worker startup script (calls Go worker)
-│   └── task-state-manager.sh     # Legacy helper (being replaced by Go)
+│   └── start-worker.sh           # Worker startup script (calls Go worker)
 ├── pkg/                          # Shared Go packages (new)
 │   ├── claude                    # Stream-JSON parsing helpers
 │   ├── config                    # Contracts loader (/home/owner/cmd/*)
@@ -62,14 +61,12 @@ make build
 # Run host CLI (Go)
 ./bin/cs-cc --prompt "Fix the login bug" \
   --github-repo owner/repo \
-  --action-type branch \
   --github-branch main \
   --dry-run
 
 # Or via go run
 go run ./cmd/cs-cc -p "Fix the login bug" \
   --github-repo owner/repo \
-  --action-type branch \
   --github-branch main \
   --dry-run
 ```

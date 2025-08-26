@@ -22,7 +22,6 @@ func TestLoadFromDir_MinimalHappyPath(t *testing.T) {
 	writeFile(t, tmp, "external_mcp.txt", "{\n  \"servers\": []\n}\n")
 	writeFile(t, tmp, "github_repo.txt", "org/repo\n")
 	writeFile(t, tmp, "github_token.txt", "ghp_secret_token\n")
-	writeFile(t, tmp, "action_type.txt", "branch\n")
 
 	cfg, err := LoadFromDir(tmp)
 	if err != nil {
@@ -43,9 +42,6 @@ func TestLoadFromDir_MinimalHappyPath(t *testing.T) {
 	}
 	if !cfg.GitHub.TokenPresent {
 		t.Fatalf("expected TokenPresent=true")
-	}
-	if cfg.GitHub.ActionType != "branch" {
-		t.Fatalf("action type mismatch: %q", cfg.GitHub.ActionType)
 	}
 }
 

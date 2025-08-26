@@ -45,10 +45,7 @@ func main() {
 	// Core flags (host contracts + GitHub context)
 	rootCmd.Flags().StringVar(&opts.cmdDir, "cmd-dir", "/home/owner/cmd", "Path to worker command directory in sandbox")
 	rootCmd.Flags().StringVar(&opts.repo, "github-repo", "", "GitHub repo (owner/name)")
-	rootCmd.Flags().StringVar(&opts.action, "action-type", "branch", "Action type: branch|pr|issue")
-	rootCmd.Flags().StringVar(&opts.branch, "github-branch", "", "Git branch (for action-type=branch)")
-	rootCmd.Flags().StringVar(&opts.prNum, "pr-number", "", "PR number (for action-type=pr)")
-	rootCmd.Flags().StringVar(&opts.issueNum, "issue-number", "", "Issue number (for action-type=issue)")
+	rootCmd.Flags().StringVar(&opts.branch, "github-branch", "", "Git branch (optional; defaults to repo default branch)")
 
 	// Orchestration inputs
 	rootCmd.Flags().StringVarP(&opts.prompt, "prompt", "p", "", "Prompt string or file path (required)")
@@ -78,12 +75,9 @@ func main() {
 
 type options struct {
 	// hostcli-compatible
-	cmdDir   string
-	repo     string
-	action   string
-	branch   string
-	prNum    string
-	issueNum string
+	cmdDir string
+	repo   string
+	branch string
 
 	// orchestration inputs
 	prompt         string
@@ -114,14 +108,11 @@ func run(o *options) error {
 	}
 
 	// Validate GitHub context only when provided
-	if o.repo != "" || o.branch != "" || o.prNum != "" || o.issueNum != "" {
+	if o.repo != "" || o.branch != "" {
 		parsed := hostcli.Args{
-			CmdDir:      "/tmp/cscc-validate", // ephemeral
-			GitHubRepo:  o.repo,
-			ActionType:  hostcli.ActionType(o.action),
-			Branch:      o.branch,
-			PRNumber:    o.prNum,
-			IssueNumber: o.issueNum,
+			CmdDir:     "/tmp/cscc-validate", // ephemeral
+			GitHubRepo: o.repo,
+			Branch:     o.branch,
 		}
 		if err := fakeDirExists(parsed.CmdDir, func() error { return hostcli.Validate(parsed) }); err != nil {
 			return newCodeError(2, "parameter validation failed", err)
@@ -153,7 +144,7 @@ func run(o *options) error {
 		if o.name != "" {
 			sandboxName = o.name
 		} else {
-			sandboxName = generateSandboxName(o.repo, firstNonEmpty(o.prNum, o.issueNum, "dev"))
+			sandboxName = generateSandboxName(o.repo, "dev")
 		}
 	}
 
@@ -173,20 +164,13 @@ func run(o *options) error {
 	if o.ghToken != "" {
 		envVars["GITHUB_TOKEN"] = o.ghToken
 	}
-	if o.prNum != "" {
-		envVars["PR_NUMBER"] = o.prNum
-		envVars["ACTION_TYPE"] = "pr"
-	} else if o.issueNum != "" {
-		envVars["ISSUE_NUMBER"] = o.issueNum
-		envVars["ACTION_TYPE"] = "issue"
-	} else if o.branch != "" {
+	if o.branch != "" {
 		envVars["GITHUB_BRANCH"] = o.branch
-		envVars["ACTION_TYPE"] = "branch"
 	}
 
 	// GitHub resource existence checks (parity with JS CLI). Only validate on create.
 	if !isResume {
-		if err := validateGitHubResources(o.repo, o.prNum, o.issueNum, o.branch, o.ghToken); err != nil {
+		if err := validateGitHubResources(o.repo, o.branch, o.ghToken); err != nil {
 			return newCodeError(2, "GitHub resource validation failed", err)
 		}
 	}
@@ -196,7 +180,7 @@ func run(o *options) error {
 		r := sandbox.NewRunner()
 		if !isResume {
 			// Build and show exact create command only for create mode (parity with legacy CLI)
-			createCmd := r.BuildCreateCommand(firstNonEmpty(o.name, generateSandboxName(o.repo, firstNonEmpty(o.prNum, o.issueNum, "dev"))), o.template, o.pool, envVars)
+			createCmd := r.BuildCreateCommand(firstNonEmpty(o.name, generateSandboxName(o.repo, "dev")), o.template, o.pool, envVars)
 			fmt.Println("cs sandbox create (preview):")
 			fmt.Println(createCmd)
 		}
@@ -246,29 +230,6 @@ func run(o *options) error {
 	if o.branch != "" {
 		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "github_branch.txt"), o.branch); err != nil {
 			return newCodeError(11, "transfer branch failed", err)
-		}
-	}
-	if o.prNum != "" {
-		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "pr_number.txt"), o.prNum); err != nil {
-			return newCodeError(11, "transfer pr number failed", err)
-		}
-	}
-	if o.issueNum != "" {
-		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "issue_number.txt"), o.issueNum); err != nil {
-			return newCodeError(11, "transfer issue number failed", err)
-		}
-	}
-	actionType := ""
-	if o.prNum != "" {
-		actionType = "pr"
-	} else if o.issueNum != "" {
-		actionType = "issue"
-	} else if o.branch != "" {
-		actionType = "branch"
-	}
-	if actionType != "" {
-		if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "action_type.txt"), actionType); err != nil {
-			return newCodeError(11, "transfer action type failed", err)
 		}
 	}
 	if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "task_mode.txt"), ternary(isResume, "resume", "create")); err != nil {
@@ -514,12 +475,6 @@ func printDryRun(sandboxName string, isResume bool, o *options, agents []agentFi
 	if o.branch != "" {
 		fmt.Printf("branch: %s\n", o.branch)
 	}
-	if o.prNum != "" {
-		fmt.Printf("pr: %s\n", o.prNum)
-	}
-	if o.issueNum != "" {
-		fmt.Printf("issue: %s\n", o.issueNum)
-	}
 	fmt.Printf("template: %s\n", o.template)
 	if o.pool != "" {
 		fmt.Printf("pool: %s\n", o.pool)
@@ -545,12 +500,6 @@ func printDryRun(sandboxName string, isResume bool, o *options, agents []agentFi
 	if o.branch != "" {
 		fmt.Println("will transfer: github_branch.txt")
 	}
-	if o.prNum != "" {
-		fmt.Println("will transfer: pr_number.txt, action_type.txt=pr")
-	}
-	if o.issueNum != "" {
-		fmt.Println("will transfer: issue_number.txt, action_type.txt=issue")
-	}
 	if o.taskID != "" {
 		fmt.Println("will transfer: task_id.txt")
 	}
@@ -562,7 +511,7 @@ func printDryRun(sandboxName string, isResume bool, o *options, agents []agentFi
 }
 
 // validateGitHubResources mirrors JS checks using gh CLI. Network failures are warnings; existence failures are errors.
-func validateGitHubResources(repo, pr, issue, branch, token string) error {
+func validateGitHubResources(repo, branch, token string) error {
 	if repo == "" {
 		return nil
 	}
@@ -582,18 +531,6 @@ func validateGitHubResources(repo, pr, issue, branch, token string) error {
 		return cmd.Run()
 	}
 
-	if pr != "" {
-		if err := run("gh", "pr", "view", pr, "--repo", repo); err != nil {
-			return fmt.Errorf("pull request #%s does not exist in %s", pr, repo)
-		}
-		return nil
-	}
-	if issue != "" {
-		if err := run("gh", "issue", "view", issue, "--repo", repo, "--json", "number"); err != nil {
-			return fmt.Errorf("issue #%s does not exist in %s", issue, repo)
-		}
-		return nil
-	}
 	if branch != "" {
 		if err := run("gh", "api", "repos/"+repo+"/branches/"+branch, "--jq", ".name"); err != nil {
 			return fmt.Errorf("branch '%s' does not exist in %s", branch, repo)

@@ -36,7 +36,7 @@ source ~/.bashrc
 2. Ensure sandbox env has `ANTHROPIC_API_KEY` access
 3. Run the CLI (binary):
    ```bash
-   cs-cc -p "Fix the login bug" --github-repo owner/repo --action-type branch --github-branch main --dry-run
+   cs-cc -p "Fix the login bug" --github-repo owner/repo --github-branch main --dry-run
    ```
 
 ## Core workflows
@@ -48,7 +48,6 @@ source ~/.bashrc
 cs-cc \
   -p ./cli/examples/emoji-readme-example/orchestration-prompt.txt \
   --github-repo owner/repo \
-  --action-type branch \
   --github-branch main \
   --template "claude-code-automation" \
   --pool "standard" \
@@ -132,10 +131,7 @@ cs-cc (Go) - Claude Sandbox Code CLI
 Flags:
   -p, --prompt string              Prompt string or file path (required)
       --github-repo string         GitHub repository (owner/repo)
-      --action-type string         Action type: branch|pr|issue (default "branch")
-      --github-branch string       Branch name (for action-type=branch)
-      --pr-number string           Pull request number (for action-type=pr)
-      --issue-number string        Issue number (for action-type=issue)
+      --github-branch string       Git branch (optional; defaults to repo default branch)
       --mcp-config string          External MCP config JSON string or file path
       --agents-dir string          Directory containing agent .md files
   -t, --tools string               Tool whitelist JSON string or file path

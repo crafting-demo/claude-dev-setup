@@ -12,9 +12,6 @@ type GitHubContext struct {
 	Repo         string
 	TokenPresent bool
 	Branch       string
-	PRNumber     string
-	IssueNumber  string
-	ActionType   string
 }
 
 type Config struct {
@@ -58,14 +55,11 @@ func LoadFromDir(baseDir string) (*Config, error) {
 		Repo:         readTrim(optionalFile(baseDir, "github_repo.txt")),
 		TokenPresent: fileHasContent(optionalFile(baseDir, "github_token.txt")),
 		Branch:       readTrim(optionalFile(baseDir, "github_branch.txt")),
-		PRNumber:     readTrim(optionalFile(baseDir, "pr_number.txt")),
-		IssueNumber:  readTrim(optionalFile(baseDir, "issue_number.txt")),
-		ActionType:   readTrim(optionalFile(baseDir, "action_type.txt")),
 	}
 
 	// Selected env variables
 	for _, key := range []string{
-		"GITHUB_REPO", "GITHUB_BRANCH", "PR_NUMBER", "ISSUE_NUMBER", "ACTION_TYPE", "SANDBOX_NAME", "CUSTOM_REPO_PATH", "SHOULD_DELETE", "DEBUG_MODE",
+		"GITHUB_REPO", "GITHUB_BRANCH", "SANDBOX_NAME", "CUSTOM_REPO_PATH", "SHOULD_DELETE", "DEBUG_MODE",
 	} {
 		if val := strings.TrimSpace(os.Getenv(key)); val != "" {
 			// Do not store tokens or secrets here
