@@ -25,9 +25,7 @@ Quick installs from the latest GitHub Release:
 
 - User-local:
 ```bash
-install -Dm755 <(curl -L "https://github.com/crafting-demo/claude-dev-setup/releases/download/v0.2.0/cs-cc") "$HOME/.local/bin/cs-cc"
-echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.bashrc
-source ~/.bashrc
+cs extensions install https://github.com/crafting-demo/claude-dev-setup --subdir bin
 ```
 
 ## Quick Start
@@ -36,7 +34,7 @@ source ~/.bashrc
 2. Ensure sandbox env has `ANTHROPIC_API_KEY` access
 3. Run the CLI (binary):
    ```bash
-   cs-cc -p "Fix the login bug" --github-repo owner/repo --github-branch main --dry-run
+   cs cc -- -p "Fix the login bug" --github-repo owner/repo --github-branch main --workspace claude --dry-run
    ```
 
 ## Core workflows
@@ -45,13 +43,14 @@ source ~/.bashrc
 
 ```bash
 # Create and run with a named sandbox, template, and optional pool
-cs-cc \
+cs cc -- \
   -p ./cli/examples/emoji-readme-example/orchestration-prompt.txt \
   --github-repo owner/repo \
   --github-branch main \
   --template "claude-code-automation" \
   --pool "standard" \
   -n "cw-docs-demo" \
+  --workspace claude \
   --debug yes
 ```
 
@@ -62,13 +61,14 @@ cs-cc \
 To run in background (non-debug):
 
 ```bash
-cs-cc \
+cs cc -- \
   -p ./cli/examples/fast-no-debug-example/orchestration-prompt.txt \
   --github-repo owner/repo \
   --github-branch main \
   --template "claude-code-automation" \
   -n "cw-fast-demo" \
   --debug no \
+  --workspace claude \
   -d no
 ```
 
@@ -79,10 +79,11 @@ This returns immediately and starts the worker in the sandbox. Logs stream to `~
 After a sandbox exists (e.g., `cw-docs-demo`), queue another task into the same sandbox:
 
 ```bash
-./bin/cs-cc \
+cs cc -- \
   -p "Add badges and improve README structure" \
   --resume cw-docs-demo \
   --task-id task-badges-001 \
+  --workspace claude \
   --debug yes
 ```
 
@@ -130,6 +131,7 @@ cs-cc (Go) - Claude Sandbox Code CLI
 
 Flags:
   -p, --prompt string              Prompt string or file path (required)
+      --workspace string           Workspace name (required)
       --github-repo string         GitHub repository (owner/repo)
       --github-branch string       Git branch (optional; defaults to repo default branch)
       --mcp-config string          External MCP config JSON string or file path

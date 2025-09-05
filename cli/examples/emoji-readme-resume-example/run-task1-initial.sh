@@ -55,6 +55,7 @@ cd "$REPO_ROOT"
   --task-id "emoji-enhancement-task" \
   --template "cc-pool-test-temp" \
   -n "$SANDBOX_NAME" \
+  --workspace claude \
   --debug yes
 
 echo "✅ Task 1 done: $SANDBOX_NAME"

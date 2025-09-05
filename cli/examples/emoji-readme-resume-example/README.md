@@ -97,6 +97,7 @@ go run ./cmd/cs-cc \
     -t tool-whitelist.json \
     -tid "emoji-enhancement-task" \
     -n "my-emoji-sandbox" \
+    --workspace claude \
     -d no \
     --debug yes
 ```
@@ -110,6 +111,7 @@ go run ./cmd/cs-cc \
     -ad agents \
     -t task2-tools.json \
     -tid "badges-structure-task" \
+    --workspace claude \
     --debug yes
 ```
 

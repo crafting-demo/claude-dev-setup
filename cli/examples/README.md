@@ -63,6 +63,7 @@ All examples require:
 - `GITHUB_TOKEN` environment variable set with repo access permissions
 - `ANTHROPIC_API_KEY` environment variable set with your Anthropic API key
 - Access to target GitHub repositories
+ - The `--workspace` flag specifying the workspace name (examples use `claude`)
 
 ## Example Structure
 

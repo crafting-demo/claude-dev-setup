@@ -48,6 +48,7 @@ cd "$REPO_ROOT"
   --template "cc-pool-test-temp" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "cs-cc-repo-agents" \
+  --workspace claude \
   --debug yes
 
 echo "✅ Done"

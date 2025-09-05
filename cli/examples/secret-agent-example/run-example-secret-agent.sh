@@ -70,6 +70,7 @@ echo ""
       -t "$TOOL_WHITELIST_FILE" \
       -n "$SANDBOX_NAME" \
       -d no \
+      --workspace claude \
       --debug yes; \
   else \
     go run ./cmd/cs-cc \
@@ -83,6 +84,7 @@ echo ""
       -t "$TOOL_WHITELIST_FILE" \
       -n "$SANDBOX_NAME" \
       -d no \
+      --workspace claude \
       --debug yes; \
   fi)
 

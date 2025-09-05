@@ -40,4 +40,5 @@ cd "$REPO_ROOT"
   --agents-dir "$AGENTS_DIR" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "cs-cc-inv-ex" \
+  --workspace claude \
   --debug yes

@@ -47,4 +47,5 @@ cd "$REPO_ROOT"
   --template "cc-pool-test-temp" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "cs-cc-no-pat" \
+  --workspace claude \
   --debug yes

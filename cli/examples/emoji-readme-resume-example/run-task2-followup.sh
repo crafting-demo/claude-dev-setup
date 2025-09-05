@@ -56,6 +56,7 @@ cd "$REPO_ROOT"
   -p "$TASK2_PROMPT" \
   -t "$TASK2_TOOLS" \
   --task-id "badges-structure-task" \
+  --workspace claude \
   --debug yes
 
 echo "✅ Task 2 done"

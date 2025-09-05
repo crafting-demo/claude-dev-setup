@@ -62,12 +62,14 @@ make build
 ./bin/cs-cc --prompt "Fix the login bug" \
   --github-repo owner/repo \
   --github-branch main \
+  --workspace claude \
   --dry-run
 
 # Or via go run
 go run ./cmd/cs-cc -p "Fix the login bug" \
   --github-repo owner/repo \
   --github-branch main \
+  --workspace claude \
   --dry-run
 ```
 

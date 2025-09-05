@@ -34,7 +34,7 @@ fi
 
 # Execute the cs-cc command (Go CLI). Prefer built binary when present; no Node fallback.
 cd "$REPO_ROOT"
-./bin/cs-cc \
+cs cc -- \
   -p "$PROMPT_FILE" \
   --github-repo "crafting-test1/claude_test" \
   --github-token "$GITHUB_TOKEN" \
@@ -44,4 +44,5 @@ cd "$REPO_ROOT"
   --agents-dir "$AGENTS_DIR" \
   -t "$TOOL_WHITELIST_FILE" \
   -n "cs-cc-emoji-ex" \
-  --debug yes
+  --debug yes \
+  --workspace claude

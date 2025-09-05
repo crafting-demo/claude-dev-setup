@@ -154,7 +154,7 @@ Allowed tools are defined as a JSON array in a file. Example:
 Note on GitHub auth: A GitHub personal access token (PAT) can optionally be included as a flag. If not included, the dev worker will attempt to use the GitHub app installation token from the target sandbox's credential store.
 
 ```bash
-cs-cc \
+cs cc -- \
   -p prompt.txt \
   --github-repo "your-org/existing-repo" \
   --github-token "$GITHUB_TOKEN" \
@@ -169,7 +169,7 @@ cs-cc \
 
 ## Step 6 (optional): Create a follow up task on the same sandbox
 ```bash
-cs-cc \
+cs cc -- \
   --resume "sb-name" \
   -p prompt2.txt \
   -t "allowed-tools.json" \

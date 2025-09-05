@@ -41,6 +41,7 @@ fi
       --template "cc-pool-test-temp" \
       -t "$TOOL_WHITELIST_FILE" \
       -n "$SB_NAME" \
+      --workspace claude \
       -d no
   else
     go run ./cmd/cs-cc \
@@ -52,6 +53,7 @@ fi
       --template "cc-pool-test-temp" \
       -t "$TOOL_WHITELIST_FILE" \
       -n "$SB_NAME" \
+      --workspace claude \
       -d no
   fi
 )
