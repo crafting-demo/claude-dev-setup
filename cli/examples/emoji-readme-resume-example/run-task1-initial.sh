@@ -34,8 +34,7 @@ if [ ! -f "$TOOL_WHITELIST" ]; then
 fi
 
 echo "🚀 Starting Emoji README Resume Example - Task 1"
-echo "📁 Using repository: $REPO"
-echo "🌿 Using branch: $BRANCH"
+
 echo "📝 Task 1 prompt: $TASK1_PROMPT"
 echo "🤖 Agents directory: $AGENTS_DIR"
 echo "🔧 Tool whitelist: $TOOL_WHITELIST"
@@ -45,7 +44,7 @@ SANDBOX_NAME="emoji-$(date +%m%d%H%M)"
 
 # Execute cs-cc with task management for initial task (Go CLI)
 cd "$REPO_ROOT"
-./bin/cs-cc \
+cs cc -- \
   -p "$TASK1_PROMPT" \
   --github-repo "crafting-test1/claude_test" \
   --github-token "$GITHUB_TOKEN" \

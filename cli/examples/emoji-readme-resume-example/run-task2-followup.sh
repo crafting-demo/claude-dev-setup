@@ -49,13 +49,12 @@ echo "Resuming: $SANDBOX_NAME"
 echo "State:"
 (cd "$SCRIPT_DIR/../../.." && ./bin/taskstate -state ~/state.json status) || true
 
-# Execute cs-cc in resume mode with different tools (prefer built binary)
+# Execute cs-cc in resume mode with different tools
 cd "$REPO_ROOT"
-./bin/cs-cc \
+cs cc -- \
   --resume "$SANDBOX_NAME" \
   -p "$TASK2_PROMPT" \
   -t "$TASK2_TOOLS" \
-  --task-id "badges-structure-task" \
   --workspace claude \
   --debug yes
 

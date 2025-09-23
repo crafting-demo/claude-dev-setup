@@ -14,13 +14,13 @@ The example consists of two tasks that work together:
 
 ### Task 1: Emoji Enhancement
 - **Goal**: Enhance README.md with emojis and visual improvements
-- **Subagent**: `emoji-enhancer` (native Claude Code subagent)
+- **MCP Tool**: `emoji-enhancer` (MCP subagent tool)
 - **Tools**: Standard tools (Read, Write, Edit, etc.)
 - **Action**: Creates initial sandbox and first task in queue
 
 ### Task 2: Badges and Structure  
 - **Goal**: Add professional badges and improve document structure
-- **Subagents**: `badge-generator`, `structure-organizer` (native Claude Code subagents)
+- **MCP Tools**: `badge-generator`, `structure-organizer` (MCP subagent tools)
 - **Tools**: Standard tools (Read, Write, Edit, etc.)
 - **Action**: Resumes existing sandbox with different tool set
 
@@ -31,10 +31,10 @@ emoji-readme-resume-example/
 ├── README.md                           # This documentation
 ├── task1-emoji-enhancement.txt         # Initial task prompt
 ├── task2-badges-and-structure.txt      # Follow-up task prompt  
-├── agents/                             # Agent definitions
-│   ├── emoji_enhancer.json            # Task 1 agent
-│   ├── badge_generator.json           # Task 2 agent
-│   └── structure_organizer.json       # Task 2 agent
+├── agents/                             # Agent definitions (YAML)
+│   ├── emoji-enhancer.yaml             # Task 1 agent
+│   ├── badge-generator.yaml            # Task 2 agent
+│   └── structure-organizer.yaml        # Task 2 agent
 ├── tool-whitelist.json                 # Task 1 tools
 ├── task2-tools.json                    # Task 2 tools
 ├── run-task1-initial.sh               # Execute initial task

@@ -10,8 +10,8 @@ Make the README.md more engaging and visually appealing by adding appropriate em
 - Make the content more engaging without being excessive
 - Keep it professional and appropriate for a technical audience
 
-**AVAILABLE SUBAGENT:**
-- **emoji-enhancer** - Native subagent that specializes in adding emojis and visual improvements to documentation
+**AVAILABLE MCP TOOL:**
+- `emoji-enhancer` — MCP subagent tool that specializes in adding emojis and visual improvements to documentation
 
 **DELIVERABLES:**
 - Enhanced README.md with appropriate emojis
@@ -19,10 +19,10 @@ Make the README.md more engaging and visually appealing by adding appropriate em
 - Maintained technical accuracy and professionalism
 
 **APPROACH:**
-Use the emoji-enhancer subagent to transform the existing README into a more visually appealing and engaging document. Focus on making it easier to scan and more inviting to read.
+Call the MCP tool `emoji-enhancer` to transform the existing README into a more visually appealing and engaging document. Focus on making it easier to scan and more inviting to read.
 
 **COMMIT POLICY (MANDATORY):**
-- After ANY change is applied by you or any subagent, immediately commit the change before proceeding.
+- After ANY change is applied by you or any tool, immediately commit the change before proceeding.
 - Use:
   ```bash
   git add -A

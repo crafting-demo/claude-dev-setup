@@ -258,14 +258,14 @@ func run(o *options) error {
 		return newCodeError(11, "transfer prompt filename failed", err)
 	}
 
-	// Agents
-	agentsDir := "/home/owner/.claude/agents"
+	// Agents (YAML) — transfer to /home/owner/cmd/agents
 	if len(agents) > 0 {
-		if err := r.Mkdir(sandboxName, agentsDir); err != nil {
-			return newCodeError(11, "create agents directory failed", err)
+		agentsCmdDir := filepath.Join(cmdDir, "agents")
+		if err := r.Mkdir(sandboxName, agentsCmdDir); err != nil {
+			return newCodeError(11, "create cmd agents directory failed", err)
 		}
 		for _, a := range agents {
-			target := filepath.Join(agentsDir, a.name+".md")
+			target := filepath.Join(agentsCmdDir, a.name+".yaml")
 			if err := r.TransferContent(sandboxName, target, a.content); err != nil {
 				return newCodeError(11, fmt.Sprintf("transfer agent %s failed", a.name), err)
 			}
@@ -426,19 +426,14 @@ func listAgentFiles(dir string) ([]agentFile, error) {
 		if d.IsDir() {
 			return nil
 		}
-		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
+		// Accept only YAML agent specs
+		low := strings.ToLower(d.Name())
+		if strings.HasSuffix(low, ".yaml") || strings.HasSuffix(low, ".yml") {
 			b, rerr := os.ReadFile(path)
 			if rerr != nil {
 				return rerr
 			}
 			name := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
-			if fm := parseYamlFrontmatter(string(b)); fm != nil {
-				// Legacy Node CLI required name and description in frontmatter
-				if fm["name"] == "" || fm["description"] == "" {
-					return fmt.Errorf("agent %s missing required frontmatter fields (name, description)", d.Name())
-				}
-				name = fm["name"]
-			}
 			files = append(files, agentFile{name: name, content: string(b)})
 		}
 		return nil
