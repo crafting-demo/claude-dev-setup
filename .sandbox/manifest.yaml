@@ -1,0 +1,9 @@
+hooks:
+  post-checkout:
+    cmd: cd gh-watcher && npm install
+jobs:
+  gh-poll:
+    run:                      # standard Run-schema block
+      cmd: cd gh-watcher && npm run watch                  
+    schedule: "*/5 * * * *"      # crontab — every 5 minutes
+    # disable_on_start: true   # uncomment if you want it created but *not* auto-scheduled

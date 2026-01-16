@@ -5,12 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"sort"
 	"strings"
 	"time"
 
@@ -52,7 +50,6 @@ func main() {
 	rootCmd.Flags().StringVar(&opts.pool, "pool", "", "Sandbox pool name")
 	rootCmd.Flags().StringVar(&opts.ghToken, "github-token", "", "GitHub access token (optional)")
 	rootCmd.Flags().StringVar(&opts.mcpCfg, "mcp-config", "", "External MCP config JSON string or file path")
-	rootCmd.Flags().StringVar(&opts.agentsDir, "agents-dir", "", "Directory containing agent .md files")
 	rootCmd.Flags().StringVarP(&opts.tools, "tools", "t", "", "Tool whitelist JSON string or file path")
 	rootCmd.Flags().StringVar(&opts.template, "template", "claude-code-automation", "Sandbox template name")
 	rootCmd.Flags().StringVarP(&opts.deleteWhenDone, "delete-when-done", "d", "yes", "Delete sandbox when done: yes|no")
@@ -89,7 +86,6 @@ type options struct {
 	pool           string
 	ghToken        string
 	mcpCfg         string
-	agentsDir      string
 	tools          string
 	template       string
 	deleteWhenDone string
@@ -147,10 +143,6 @@ func run(o *options) error {
 	if err != nil {
 		return newCodeError(2, "invalid tools whitelist", err)
 	}
-	agents, err := listAgentFiles(o.agentsDir)
-	if err != nil {
-		return newCodeError(2, "invalid agents directory", err)
-	}
 
 	// Determine sandbox
 	isResume := strings.TrimSpace(o.resume) != ""
@@ -198,7 +190,7 @@ func run(o *options) error {
 			fmt.Println("cs sandbox create (preview):")
 			fmt.Println(createCmd)
 		}
-		printDryRun(sandboxName, isResume, o, agents)
+		printDryRun(sandboxName, isResume, o)
 		return nil
 	}
 
@@ -256,20 +248,6 @@ func run(o *options) error {
 	}
 	if err := r.TransferContent(sandboxName, filepath.Join(cmdDir, "prompt_filename.txt"), promptFile); err != nil {
 		return newCodeError(11, "transfer prompt filename failed", err)
-	}
-
-	// Agents
-	agentsDir := "/home/owner/.claude/agents"
-	if len(agents) > 0 {
-		if err := r.Mkdir(sandboxName, agentsDir); err != nil {
-			return newCodeError(11, "create agents directory failed", err)
-		}
-		for _, a := range agents {
-			target := filepath.Join(agentsDir, a.name+".md")
-			if err := r.TransferContent(sandboxName, target, a.content); err != nil {
-				return newCodeError(11, fmt.Sprintf("transfer agent %s failed", a.name), err)
-			}
-		}
 	}
 
 	fmt.Printf("[SUCCESS] Sandbox \"%s\" %s and configured.\n", sandboxName, ternary(isResume, "resumed", "created"))
@@ -408,48 +386,6 @@ func readOptionalJSON(value string) (string, error) {
 	return content, nil
 }
 
-type agentFile struct {
-	name    string
-	content string
-}
-
-func listAgentFiles(dir string) ([]agentFile, error) {
-	if strings.TrimSpace(dir) == "" {
-		return nil, nil
-	}
-	root := absPath(dir)
-	var files []agentFile
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-		if strings.HasSuffix(strings.ToLower(d.Name()), ".md") {
-			b, rerr := os.ReadFile(path)
-			if rerr != nil {
-				return rerr
-			}
-			name := strings.TrimSuffix(d.Name(), filepath.Ext(d.Name()))
-			if fm := parseYamlFrontmatter(string(b)); fm != nil {
-				// Legacy Node CLI required name and description in frontmatter
-				if fm["name"] == "" || fm["description"] == "" {
-					return fmt.Errorf("agent %s missing required frontmatter fields (name, description)", d.Name())
-				}
-				name = fm["name"]
-			}
-			files = append(files, agentFile{name: name, content: string(b)})
-		}
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
-	return files, nil
-}
-
 func absPath(p string) string {
 	if p == "" {
 		return p
@@ -476,7 +412,7 @@ func fakeDirExists(path string, fn func() error) error {
 	return fn()
 }
 
-func printDryRun(sandboxName string, isResume bool, o *options, agents []agentFile) {
+func printDryRun(sandboxName string, isResume bool, o *options) {
 	mode := "create"
 	if isResume {
 		mode = "resume"
@@ -518,9 +454,6 @@ func printDryRun(sandboxName string, isResume bool, o *options, agents []agentFi
 		fmt.Println("will transfer: task_id.txt")
 	}
 	fmt.Println("will transfer: task_mode.txt, prompt_filename.txt")
-	if len(agents) > 0 {
-		fmt.Printf("agents: %d files -> ~/.claude/agents\n", len(agents))
-	}
 	fmt.Println("--------------")
 }
 
@@ -554,34 +487,3 @@ func validateGitHubResources(repo, branch, token string) error {
 	return nil
 }
 
-// parseYamlFrontmatter extracts simple YAML key: value pairs between '---' delimiters.
-// Returns nil when no frontmatter present.
-func parseYamlFrontmatter(content string) map[string]string {
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
-		return nil
-	}
-	endIdx := -1
-	for i := 1; i < len(lines); i++ {
-		if strings.TrimSpace(lines[i]) == "---" {
-			endIdx = i
-			break
-		}
-	}
-	if endIdx == -1 {
-		return nil
-	}
-	fm := map[string]string{}
-	for _, line := range lines[1:endIdx] {
-		t := strings.TrimSpace(line)
-		if t == "" || strings.HasPrefix(t, "#") {
-			continue
-		}
-		if idx := strings.Index(t, ":"); idx > 0 {
-			key := strings.TrimSpace(t[:idx])
-			val := strings.TrimSpace(t[idx+1:])
-			fm[key] = val
-		}
-	}
-	return fm
-}

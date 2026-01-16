@@ -3,7 +3,7 @@ workspaces:
     checkouts:
       - path: claude
         repo:
-          git: git@github.com:crafting-demo/claude-dev-setup.git
+          git: https://github.com/crafting-demo/claude-dev-setup.git
         version_spec: multi-agent
         manifest:
           overlays:
