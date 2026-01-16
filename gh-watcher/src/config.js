@@ -17,3 +17,12 @@ export const PR_LABELS = (process.env.PR_LABELS || '')
 export const SANDBOX_TEMPLATE_NAME = process.env.SANDBOX_TEMPLATE_NAME || '';
 export const SANDBOX_DEF_PATH = process.env.SANDBOX_DEF_PATH
   || resolve(process.cwd(), '..', 'claude-code-automation', 'template.yaml');
+export const TOOL_WHITELIST_JSON = process.env.TOOL_WHITELIST_JSON
+  || JSON.stringify([
+    'Bash',
+    'Read',
+    'Write',
+    'Edit',
+    'LS',
+    'Grep',
+  ]);

@@ -37,6 +37,7 @@ This repo provides a simple GitHub PR watcher that runs on a cron schedule, crea
 - `CMD_DIR` (optional; default `/home/owner/cmd`)
 - `SANDBOX_DEF_PATH` (optional; default `../claude-code-automation/template.yaml`)
 - `SANDBOX_TEMPLATE_NAME` (optional; if set, uses a named template instead of the local definition file)
+- `TOOL_WHITELIST_JSON` (optional; JSON array of allowed tools for Claude)
 
 ## Optional: cs-cc CLI
 

@@ -7,6 +7,7 @@ import {
   GITHUB_TOKEN,
   SANDBOX_DEF_PATH,
   SANDBOX_TEMPLATE_NAME,
+  TOOL_WHITELIST_JSON,
   USE_SANDBOX_POOL,
   SANDBOX_POOL_NAME,
 } from './config.js';
@@ -116,6 +117,7 @@ export async function runDevAgent(payload, options) {
     await transferContent(extractedSandboxName, `${cmdDir}/github_repo.txt`, `${owner}/${repo}`);
     await transferContent(extractedSandboxName, `${cmdDir}/github_token.txt`, GITHUB_TOKEN);
     await transferContent(extractedSandboxName, `${cmdDir}/github_branch.txt`, prHeadRef || '');
+    await transferContent(extractedSandboxName, `${cmdDir}/tool_whitelist.txt`, TOOL_WHITELIST_JSON);
 
     // Execute start-worker.sh in the sandbox
     const execCmd = `cs exec -t -u 1000 -W ${extractedSandboxName}/claude -- bash -i -c '~/claude/dev-worker/start-worker.sh'`;
