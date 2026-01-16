@@ -12,7 +12,7 @@ This repo provides a simple GitHub PR watcher that runs on a cron schedule, crea
 
 ## Quick setup
 
-1. **Create the worker template** in Crafting with `claude-code-automation/template.yaml`.
+1. **Ensure the worker definition file is present**: `claude-code-automation/template.yaml`.
 2. **Ensure secrets are available** in the template environment:
    - `ANTHROPIC_API_KEY`
 3. **Configure the watcher**:
@@ -35,6 +35,8 @@ This repo provides a simple GitHub PR watcher that runs on a cron schedule, crea
 - `PROCESS_EXISTING_PRS` (optional)
 - `PR_LABELS` (optional; comma-separated)
 - `CMD_DIR` (optional; default `/home/owner/cmd`)
+- `SANDBOX_DEF_PATH` (optional; default `../claude-code-automation/template.yaml`)
+- `SANDBOX_TEMPLATE_NAME` (optional; if set, uses a named template instead of the local definition file)
 
 ## Optional: cs-cc CLI
 

@@ -2,7 +2,14 @@ import { exec } from 'node:child_process';
 import { mkdtempSync, unlinkSync, writeFileSync, rmdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join as joinPath } from 'node:path';
-import { CMD_DIR, GITHUB_TOKEN, USE_SANDBOX_POOL, SANDBOX_POOL_NAME } from './config.js';
+import {
+  CMD_DIR,
+  GITHUB_TOKEN,
+  SANDBOX_DEF_PATH,
+  SANDBOX_TEMPLATE_NAME,
+  USE_SANDBOX_POOL,
+  SANDBOX_POOL_NAME,
+} from './config.js';
 import { octokit } from './github.js';
 
 function execCommand(command, timeoutMs) {
@@ -55,8 +62,11 @@ export async function runDevAgent(payload, options) {
   // Determine if the worker should be destroyed after completion
   const shouldDelete = debug ? 'false' : 'true';
 
-  // Build command template based on pool configuration
-  const baseCreateCmd = `cs sandbox create \${sandboxName} -t claude-code-automation`;
+  // Build command template based on template source
+  const templateArg = SANDBOX_TEMPLATE_NAME
+    ? `-t ${SANDBOX_TEMPLATE_NAME}`
+    : `--from def:${SANDBOX_DEF_PATH}`;
+  const baseCreateCmd = `cs sandbox create \${sandboxName} ${templateArg}`;
   const poolOption = USE_SANDBOX_POOL === 1 ? ` --use-pool \${poolName}` : '';
   const envVars = ` \\
   -D 'claude/env[GITHUB_REPO]=\${owner}/\${repo}' \\
